@@ -650,7 +650,6 @@ canvas { width: 100% !important; }
     <button class="btn bg" onclick="shiftDate(1)" title="Next day" style="padding:6px 10px;font-size:14px;">›</button>
     <input type="date" id="game-date" style="width:130px;" onchange="fetchMLBGames()"/>
     <button class="btn bp" id="fetch-btn" onclick="fetchMLBGames()">↻ Fetch</button>
-    <button class="btn bg" onclick="loadDemo()">NYY @ Giants</button>
     <button class="btn bg" onclick="S.games=[];save();rGames();">Clear</button>
     <span class="api-status" id="api-status"></span>
   </div>
@@ -678,7 +677,7 @@ canvas { width: 100% !important; }
   </div>
 
   <div id="gg" class="gg">
-    <div class="nd" style="grid-column:1/-1">Enter your Odds API key above and click Fetch, or load the demo slate.</div>
+    <div class="nd" style="grid-column:1/-1">Enter your Odds API key above and click Fetch,</div>
   </div>
 </div>
 
@@ -1365,7 +1364,7 @@ async function fetchOdds(){
     console.error(err);
     status.className='api-status err';
     status.textContent='✗ '+err.message;
-    document.getElementById('gg').innerHTML=`<div class="nd" style="grid-column:1/-1">API error: ${err.message}<br><br>Try the demo slate to see how it works.</div>`;
+    document.getElementById('gg').innerHTML=`<div class="nd" style="grid-column:1/-1">API error: ${err.message}</div>`;
     toast('Odds API error: '+err.message,'err');
   }
 }
@@ -1551,7 +1550,7 @@ function modelCalc(g){
 function rGames(){
   const grid=document.getElementById('gg');
   if(!S.games.length){
-    grid.innerHTML='<div class="nd" style="grid-column:1/-1">No games loaded. Fetch today\'s slate or load the demo.</div>';
+    grid.innerHTML='<div class="nd" style="grid-column:1/-1">No games loaded. Pick a date and click ↻ Fetch.</div>';
     updGStats([]);return;
   }
   const calcs=S.games.map(g=>({g,r:modelCalc(g)}));
@@ -1617,12 +1616,12 @@ function rGames(){
       </div>
 
       <div class="gc-sp">
-        <div class="gc-sp-side" onclick="openSpModal('${gid}','aw','${g.away}')" style="cursor:pointer;" title="Click to change pitcher">
-          <span class="sp-name">${r.awSpName||'TBD'}</span>
+        <div class="gc-sp-side" onclick="openSpModal('${gid}','aw','${g.away}')" style="cursor:pointer;${g.awaySpManual?'background:#fffde7;':''}" title="Click to change pitcher">
+          <span class="sp-name">${r.awSpName||'TBD'}${g.awaySpManual?'<span style="font-size:9px;color:var(--red);font-weight:600;margin-left:4px;">sub</span><span onclick="event.stopPropagation();revertSP(''+gid+'','aw')" style="margin-left:5px;cursor:pointer;color:#bbb;font-size:10px;" title="Revert SP" onmouseover="this.style.color='#666'" onmouseout="this.style.color='#bbb'">↺</span>':''}</span>
           <span class="sp-hand">${n(r.awSpWar162).toFixed(2)}</span>
         </div>
-        <div class="gc-sp-side" onclick="openSpModal('${gid}','hw','${g.home}')" style="cursor:pointer;" title="Click to change pitcher">
-          <span class="sp-name">${r.hwSpName||'TBD'}</span>
+        <div class="gc-sp-side" onclick="openSpModal('${gid}','hw','${g.home}')" style="cursor:pointer;${g.homeSpManual?'background:#fffde7;':''}" title="Click to change pitcher">
+          <span class="sp-name">${r.hwSpName||'TBD'}${g.homeSpManual?'<span style="font-size:9px;color:var(--red);font-weight:600;margin-left:4px;">sub</span><span onclick="event.stopPropagation();revertSP(''+gid+'','hw')" style="margin-left:5px;cursor:pointer;color:#bbb;font-size:10px;" title="Revert SP" onmouseover="this.style.color='#666'" onmouseout="this.style.color='#bbb'">↺</span>':''}</span>
           <span class="sp-hand">${n(r.hwSpWar162).toFixed(2)}</span>
         </div>
       </div>
@@ -1653,8 +1652,8 @@ function rGames(){
 
       <div class="gc-expand">
         <button onclick="toggleDrawer('${gid}')" id="xbtn-${gid}">▾ Model Math</button>
-        <button onclick="logFromCard('${gid}','${g.away}',${g.awayOdds},${ae},(${n(r.awWP)*100}).toFixed(2))">+ Log ${g.away}</button>
-        <button onclick="logFromCard('${gid}','${g.home}',${g.homeOdds},${he},(${n(r.hwWP)*100}).toFixed(2))">+ Log ${g.home}</button>
+        <button onclick="logFromCard('${gid}','${g.away}','${g.home}',${g.awayOdds},${ae},(${n(r.awWP)*100}).toFixed(2))">+ Log ${g.away}</button>
+        <button onclick="logFromCard('${gid}','${g.home}','${g.away}',${g.homeOdds},${he},(${n(r.hwWP)*100}).toFixed(2))">+ Log ${g.home}</button>
       </div>
 
       <div class="gc-drawer" id="dr-${gid}">
@@ -2020,14 +2019,33 @@ function doSpSwap(name, war162){
   if(!spCtx) return;
   const g = S.games.find(g=>String(g.id)===String(spCtx.gid));
   if(!g) return;
-  if(spCtx.side==='aw'){ g.awaySpName=name; g.awaySpWar=war162; g.awaySpGs=32; }
-  else                  { g.homeSpName=name; g.homeSpWar=war162; g.homeSpGs=32; }
+  if(spCtx.side==='aw'){
+    if(!g.awaySpOrig) g.awaySpOrig = g.awaySpName; // save original
+    g.awaySpName=name; g.awaySpWar=war162; g.awaySpGs=32; g.awaySpManual=true;
+  } else {
+    if(!g.homeSpOrig) g.homeSpOrig = g.homeSpName;
+    g.homeSpName=name; g.homeSpWar=war162; g.homeSpGs=32; g.homeSpManual=true;
+  }
   save();
   closeSwapModal();
   rGames();
   toast(`SP changed to ${name}`);
 }
 
+function revertSP(gid, side){
+  const g = S.games.find(g=>String(g.id)===String(gid));
+  if(!g) return;
+  if(side==='aw' && g.awaySpOrig){
+    const sp = findPitcher(g.away, g.awaySpOrig);
+    g.awaySpName = g.awaySpOrig; g.awaySpWar = sp?.war162||0;
+    delete g.awaySpManual; delete g.awaySpOrig;
+  } else if(side==='hw' && g.homeSpOrig){
+    const sp = findPitcher(g.home, g.homeSpOrig);
+    g.homeSpName = g.homeSpOrig; g.homeSpWar = sp?.war162||0;
+    delete g.homeSpManual; delete g.homeSpOrig;
+  }
+  save(); rGames();
+}
 function shiftDate(days){
   const el = document.getElementById('game-date');
   const d = el.value ? new Date(el.value + 'T12:00:00') : new Date();
@@ -2040,8 +2058,8 @@ function goToday(){
   el.valueAsDate = new Date();
   fetchMLBGames();
 }
-function logFromCard(gid, team, odds, edgePct, xwpPct){
-  document.getElementById('p-tx').value = team + ' ' + (odds>0?'+':'') + odds;
+function logFromCard(gid, team, opp, odds, edgePct, xwpPct){
+  document.getElementById('p-tx').value = team + ' vs ' + opp;
   document.getElementById('p-od').value = odds;
   document.getElementById('p-xwp').value = xwpPct ? (+xwpPct).toFixed(2) : '';
   autoCalcEdge();
