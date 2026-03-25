@@ -703,6 +703,8 @@ input[type=number] { -moz-appearance:textfield; }
 
   </div>
 
+</div>
+
 <!-- ══ PICKS ══ -->
 <div id="panel-picks" class="panel">
   <div class="card">
@@ -1896,13 +1898,20 @@ function updGStats(calcs){
     const hwBg = edgeBg(hwEdge*100);
     const game = `${g.away} @ ${g.home}`;
     const f = 'font-family:Calibri,sans-serif;';
+    const bothConfirmed = g.awConfirmed && g.hwConfirmed;
+    const anyProjected = g.hasBMLineup && !bothConfirmed;
+    const lineupDot = bothConfirmed
+      ? '<span title="Both lineups confirmed" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#2e7d32;margin-left:5px;vertical-align:middle;"></span>'
+      : anyProjected
+        ? '<span title="Projected lineups" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#e65100;margin-left:5px;vertical-align:middle;"></span>'
+        : '<span title="No lineups yet" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#ccc;margin-left:5px;vertical-align:middle;"></span>';
 
     const awMyOdds = g.myAwOdds || '';
     const hwMyOdds = g.myHwOdds || '';
 
     rows.push(`<tr>
       <td rowspan="2" style="${f}color:var(--muted);font-size:11px;vertical-align:middle;border-right:1px solid var(--border);white-space:nowrap;background:#fff;">
-        <div style="font-weight:600;color:var(--text)">${game}</div>
+        <div style="font-weight:600;color:var(--text)">${game}${lineupDot}</div>
         <div style="font-size:10px;margin-top:2px;">${r.gameTime||''}</div>
       </td>
       <td style="${f}color:#000;font-weight:600;${awBg}">
