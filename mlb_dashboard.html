@@ -1617,11 +1617,11 @@ function rGames(){
 
       <div class="gc-sp">
         <div class="gc-sp-side" onclick="openSpModal('${gid}','aw','${g.away}')" style="cursor:pointer;${g.awaySpManual?'background:#fffde7;':''}" title="Click to change pitcher">
-          <span class="sp-name">${r.awSpName||'TBD'}${g.awaySpManual?'<span style="font-size:9px;color:var(--red);font-weight:600;margin-left:4px;">sub</span><span onclick="event.stopPropagation();revertSP(''+gid+'','aw')" style="margin-left:5px;cursor:pointer;color:#bbb;font-size:10px;" title="Revert SP" onmouseover="this.style.color='#666'" onmouseout="this.style.color='#bbb'">↺</span>':''}</span>
+          <span class="sp-name">${r.awSpName||'TBD'}${g.awaySpManual ? spSubLabel(gid,'aw') : ''}</span>
           <span class="sp-hand">${n(r.awSpWar162).toFixed(2)}</span>
         </div>
         <div class="gc-sp-side" onclick="openSpModal('${gid}','hw','${g.home}')" style="cursor:pointer;${g.homeSpManual?'background:#fffde7;':''}" title="Click to change pitcher">
-          <span class="sp-name">${r.hwSpName||'TBD'}${g.homeSpManual?'<span style="font-size:9px;color:var(--red);font-weight:600;margin-left:4px;">sub</span><span onclick="event.stopPropagation();revertSP(''+gid+'','hw')" style="margin-left:5px;cursor:pointer;color:#bbb;font-size:10px;" title="Revert SP" onmouseover="this.style.color='#666'" onmouseout="this.style.color='#bbb'">↺</span>':''}</span>
+          <span class="sp-name">${r.hwSpName||'TBD'}${g.homeSpManual ? spSubLabel(gid,'hw') : ''}</span>
           <span class="sp-hand">${n(r.hwSpWar162).toFixed(2)}</span>
         </div>
       </div>
@@ -2030,6 +2030,13 @@ function doSpSwap(name, war162){
   closeSwapModal();
   rGames();
   toast(`SP changed to ${name}`);
+}
+
+function spSubLabel(gid, side){
+  return '<span style="font-size:9px;color:var(--red);font-weight:600;margin-left:4px;">sub</span>'
+       + '<span onclick="event.stopPropagation();revertSP(\'' + gid + '\',\'' + side + '\')" '
+       + 'style="margin-left:5px;cursor:pointer;color:#bbb;font-size:10px;" title="Revert SP" '
+       + 'onmouseover="this.style.color=\'#666\'" onmouseout="this.style.color=\'#bbb\'">↺</span>';
 }
 
 function revertSP(gid, side){
