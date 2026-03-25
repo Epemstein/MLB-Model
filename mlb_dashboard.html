@@ -1605,12 +1605,12 @@ function rGames(){
 
       <div class="gc-teams">
         <div class="gc-team-hdr away" style="background:${awInfo.primary}" onclick="toggleDrawer('${gid}')">
-          <img class="team-logo-bg" src="${awLogo}" alt="" />
+          <img class="team-logo-bg" src="${awLogo}" alt="" onerror="this.src='${TEAM_LOGOS[g.away]||''}'" />
           <span class="team-hdr-name">${g.away}</span>
           <div class="win-pct-block"><div class="win-pct">${awPct}%</div><div class="win-implied">${fmtO(r.awMO)}</div></div>
         </div>
         <div class="gc-team-hdr home" style="background:${hwInfo.primary}" onclick="toggleDrawer('${gid}')">
-          <img class="team-logo-bg" src="${hwLogo}" alt="" />
+          <img class="team-logo-bg" src="${hwLogo}" alt="" onerror="this.src='${TEAM_LOGOS[g.home]||''}'" />
           <span class="team-hdr-name">${g.home}</span>
           <div class="win-pct-block"><div class="win-pct">${hwPct}%</div><div class="win-implied">${fmtO(r.hwMO)}</div></div>
         </div>
@@ -2227,13 +2227,8 @@ const TEAM_LOGOS = {
 };
 // Use local proxy server when available (python3 server.py), else inline SVG badge
 function teamLogo(abr){
-  const h = window.location.hostname;
-  const isLocal = h === 'localhost' || h === '127.0.0.1' || h.startsWith('192.168.') || h === '';
-  if(isLocal){
-    const slug = (TEAM_INFO[abr]||{}).espn || abr.toLowerCase();
-    return `https://a.espncdn.com/i/teamlogos/mlb/500/${slug}.png`;
-  }
-  return TEAM_LOGOS[abr] || '';
+  const slug = (TEAM_INFO[abr]||{}).espn || abr.toLowerCase();
+  return `https://a.espncdn.com/i/teamlogos/mlb/500/${slug}.png`;
 }
 
 let currentTeam = 'NYY';
