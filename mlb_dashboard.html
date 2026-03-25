@@ -482,8 +482,7 @@ select option { background: #fff; }
 .sw::-webkit-scrollbar { width: 4px; height: 4px; }
 .sw::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 .dt { width: 100%; border-collapse: collapse; font-size: 12px; }
-.dt th {
-  font-size: 10px;
+.dt th {\n  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: .06em;
   color: var(--muted);
@@ -620,6 +619,7 @@ canvas { width: 100% !important; }
 input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
 input[type=number] { -moz-appearance:textfield; }
+#odds-summary-table td, #odds-summary-table th { padding:3px 5px; }
 </style>
 </head>
 <body>
@@ -658,41 +658,50 @@ input[type=number] { -moz-appearance:textfield; }
     <span class="api-status" id="api-status"></span>
   </div>
 
-  <!-- ODDS TABLE (collapsible) -->
-  <div class="card" style="margin-bottom:12px;padding:0;overflow:hidden;max-width:700px;">
-    <div id="odds-table-hdr" onclick="toggleOddsTable()" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;user-select:none;border-bottom:1px solid var(--border);">
-      <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">Today's Odds Summary</span>
-      <span id="odds-toggle-icon" style="font-size:11px;color:var(--muted);">▾ collapse</span>
-    </div>
-    <div id="odds-table-body">
-      <table class="dt" id="odds-summary-table" style="width:100%;font-family:Calibri,sans-serif;table-layout:fixed;">
-        <colgroup>
-          <col style="width:16.66%">
-          <col style="width:16.66%">
-          <col style="width:16.66%">
-          <col style="width:16.66%">
-          <col style="width:16.66%">
-          <col style="width:16.66%">
-        </colgroup>
-        <thead><tr>
-          <th>Game</th>
-          <th>Team</th>
-          <th style="text-align:right">My Odds</th>
-          <th style="text-align:right">Market</th>
-          <th style="text-align:right">Model</th>
-          <th style="text-align:right">Edge</th>
-        </tr></thead>
-        <tbody id="odds-summary-body">
-          <tr><td colspan="6" class="nd">Load a slate to see odds.</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
+  <!-- ODDS TABLE + GAME CARDS side by side -->
+  <div style="display:flex;gap:14px;align-items:flex-start;">
 
-  <div id="gg" class="gg">
-    <div class="nd" style="grid-column:1/-1">Enter your Odds API key above and click Fetch,</div>
+    <!-- LEFT: Odds Summary -->
+    <div style="flex:0 0 420px;min-width:0;">
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div id="odds-table-hdr" onclick="toggleOddsTable()" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;user-select:none;border-bottom:1px solid var(--border);">
+          <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">Odds Summary</span>
+          <span id="odds-toggle-icon" style="font-size:11px;color:var(--muted);">▾</span>
+        </div>
+        <div id="odds-table-body">
+          <table class="dt" id="odds-summary-table" style="width:100%;font-family:Calibri,sans-serif;table-layout:fixed;font-size:11px;">
+            <colgroup>
+              <col style="width:22%">
+              <col style="width:18%">
+              <col style="width:15%">
+              <col style="width:15%">
+              <col style="width:15%">
+              <col style="width:15%">
+            </colgroup>
+            <thead><tr>
+              <th style="padding:4px 6px">Game</th>
+              <th style="padding:4px 6px">Team</th>
+              <th style="text-align:right;padding:4px 4px">My</th>
+              <th style="text-align:right;padding:4px 4px">Mkt</th>
+              <th style="text-align:right;padding:4px 4px">Mdl</th>
+              <th style="text-align:right;padding:4px 4px">Edge</th>
+            </tr></thead>
+            <tbody id="odds-summary-body">
+              <tr><td colspan="6" class="nd">Load a slate.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Game Cards -->
+    <div style="flex:1;min-width:0;">
+      <div id="gg" class="gg">
+        <div class="nd" style="grid-column:1/-1">Enter your Odds API key above and click Fetch,</div>
+      </div>
+    </div>
+
   </div>
-</div>
 
 <!-- ══ PICKS ══ -->
 <div id="panel-picks" class="panel">
@@ -1901,7 +1910,7 @@ function updGStats(calcs){
         ${g.away}
       </td>
       <td style="${f}text-align:right;${awBg}"><input type="text" inputmode="numeric" value="${awMyOdds}"
-        style="width:58px;font-family:Calibri,sans-serif;font-size:11px;text-align:right;border:1px solid var(--border2);border-radius:3px;padding:1px 4px;background:transparent;"
+        style="width:44px;font-family:Calibri,sans-serif;font-size:11px;text-align:right;border:1px solid var(--border2);border-radius:3px;padding:1px 3px;background:transparent;"
         oninput="setMyOdds('${gid}','aw',this.value)" /></td>
       <td style="${f}text-align:right;${awBg}color:#000">${fmtO(g.awayOdds)}</td>
       <td style="${f}text-align:right;${awBg}color:var(--accent)">${fmtO(r.awMO)}</td>
@@ -1912,7 +1921,7 @@ function updGStats(calcs){
         ${g.home}
       </td>
       <td style="${f}text-align:right;${hwBg}"><input type="text" inputmode="numeric" value="${hwMyOdds}"
-        style="width:58px;font-family:Calibri,sans-serif;font-size:11px;text-align:right;border:1px solid var(--border2);border-radius:3px;padding:1px 4px;background:transparent;"
+        style="width:44px;font-family:Calibri,sans-serif;font-size:11px;text-align:right;border:1px solid var(--border2);border-radius:3px;padding:1px 3px;background:transparent;"
         oninput="setMyOdds('${gid}','hw',this.value)" /></td>
       <td style="${f}text-align:right;${hwBg}color:#000">${fmtO(g.homeOdds)}</td>
       <td style="${f}text-align:right;${hwBg}color:var(--accent)">${fmtO(r.hwMO)}</td>
