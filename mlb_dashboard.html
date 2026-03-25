@@ -699,8 +699,10 @@ input[type=number] { -moz-appearance:textfield; }
   <div class="card">
     <div class="ct">Log Pick</div>
     <div class="fr">
-      <div class="fg"><label class="fl">Date</label><input type="date" id="p-dt"/></div>
-      <div class="fg"><label class="fl">Pick</label><input type="text" id="p-tx" placeholder="Yankees +130 @ SF"/></div>
+      <div class="fg"><label class="fl">Game Date</label><input type="date" id="p-dt"/></div>
+      <div class="fg"><label class="fl">Game Time</label><input type="text" id="p-gt" placeholder="4:05 PM ET" readonly style="background:#f8f8f8;color:var(--muted)"/></div>
+      <div class="fg"><label class="fl">Pick</label><input type="text" id="p-tx" placeholder="NYY"/></div>
+      <div class="fg"><label class="fl" style="opacity:0">vs</label><div style="display:flex;align-items:center;gap:6px;padding-top:2px;"><span id="p-ha" style="font-size:11px;font-weight:600;color:var(--muted);min-width:20px;text-align:center;">vs</span><input type="text" id="p-opp" placeholder="SFG" style="flex:1"/></div></div>
       <div class="fg"><label class="fl">Odds</label><input type="number" id="p-od" placeholder="+130" oninput="autoCalcEdge()"/></div>
       <div class="fg"><label class="fl">xWP %</label><input type="number" id="p-xwp" placeholder="52.9" step="0.01" oninput="autoCalcEdge()" readonly style="background:#f8f8f8;color:var(--muted)"/></div>
       <div class="fg"><label class="fl">Edge %</label><input type="number" id="p-ed" placeholder="auto" step="0.01" readonly style="background:#f8f8f8;color:var(--muted)"/></div>
@@ -713,7 +715,7 @@ input[type=number] { -moz-appearance:textfield; }
   </div>
   <div class="card">
     <div class="ct">Pick Log <span id="p-ct" style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);"></span></div>
-    <div class="sw"><table class="dt"><thead><tr><th>#</th><th>Date</th><th>Pick</th><th>Odds</th><th>xWP</th><th>Edge</th><th>Units</th><th>Result</th><th>Won</th><th>Running</th><th></th></tr></thead><tbody id="pb"><tr><td colspan="11" class="nd">No picks yet.</td></tr></tbody></table></div>
+    <div class="sw"><table class="dt"><thead><tr><th>#</th><th>Date</th><th>Pick</th><th>Opp</th><th>Game Time</th><th>Odds</th><th>xWP</th><th>Edge</th><th>Units</th><th>Result</th><th>Won</th><th>Running</th><th>Placed</th><th></th></tr></thead><tbody id="pb"><tr><td colspan="14" class="nd">No picks yet.</td></tr></tbody></table></div>
   </div>
 </div>
 
@@ -1665,8 +1667,8 @@ function rGames(){
 
       <div class="gc-expand">
         <button onclick="toggleDrawer('${gid}')" id="xbtn-${gid}">▾ Model Math</button>
-        <button onclick="logFromCard('${gid}','${g.away}','${g.home}',${g.awayOdds},${ae},(${n(r.awWP)*100}).toFixed(2))">+ Log ${g.away}</button>
-        <button onclick="logFromCard('${gid}','${g.home}','${g.away}',${g.homeOdds},${he},(${n(r.hwWP)*100}).toFixed(2))">+ Log ${g.home}</button>
+        <button onclick="logFromCard('${gid}','${g.away}','${g.home}',${g.awayOdds},${ae},(${n(r.awWP)*100}).toFixed(2),'${r.gameTime||''}',false)">+ Log ${g.away}</button>
+        <button onclick="logFromCard('${gid}','${g.home}','${g.away}',${g.homeOdds},${he},(${n(r.hwWP)*100}).toFixed(2),'${r.gameTime||''}',true)">+ Log ${g.home}</button>
       </div>
 
       <div class="gc-drawer" id="dr-${gid}">
@@ -1762,20 +1764,25 @@ function autoCalcEdge(){
   }
 }
 function addPick(){
-  const dt=document.getElementById('p-dt').value;
-  const tx=document.getElementById('p-tx').value.trim();
-  const od=parseFloat(document.getElementById('p-od').value);
-  const xwp=parseFloat(document.getElementById('p-xwp').value)||0;
-  const ed=parseFloat(document.getElementById('p-ed').value);
-  const un=parseFloat(document.getElementById('p-un').value)||1;
-  const rs=document.getElementById('p-rs').value;
+  const dt  = document.getElementById('p-dt').value;
+  const gt  = document.getElementById('p-gt').value.trim();
+  const tx  = document.getElementById('p-tx').value.trim();
+  const opp = document.getElementById('p-opp').value.trim();
+  const ha  = document.getElementById('p-ha').textContent.trim();
+  const od  = parseFloat(document.getElementById('p-od').value);
+  const xwp = parseFloat(document.getElementById('p-xwp').value)||0;
+  const ed  = parseFloat(document.getElementById('p-ed').value);
+  const un  = parseFloat(document.getElementById('p-un').value)||1;
+  const rs  = document.getElementById('p-rs').value;
+  const tp  = new Date().toLocaleString('en-US',{month:'2-digit',day:'2-digit',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true});
   if(!dt||!tx||isNaN(od)){toast('Fill date, pick, and odds.','err');return;}
   const imp = od>=0 ? 100/(od+100) : Math.abs(od)/(Math.abs(od)+100);
   const edFinal = !isNaN(ed) ? ed : (!isNaN(xwp) ? (xwp/100 - imp)*100 : 0);
-  const uw=rs==='Win'?un*(aToDec(od)-1):rs==='Loss'?-un:0;
-  S.picks.push({id:Date.now(),dt,tx,od,ed:edFinal,xwp,un,rs,uw});
+  const uw = rs==='Win'?un*(aToDec(od)-1):rs==='Loss'?-un:0;
+  S.picks.push({id:Date.now(),dt,gt,tx,opp,ha,od,ed:edFinal,xwp,un,rs,uw,tp});
   save();rPicks();rPerf();
-  ['p-tx','p-od','p-xwp','p-ed'].forEach(id=>document.getElementById(id).value='');
+  ['p-tx','p-opp','p-od','p-xwp','p-ed','p-gt'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('p-ha').textContent='vs';
   document.getElementById('p-un').value='1';document.getElementById('p-rs').value='Pending';
   toast('Pick logged!');
 }
@@ -1788,15 +1795,18 @@ function updPick(id,rs){
 function rPicks(){
   const b=document.getElementById('pb');
   document.getElementById('p-ct').textContent=S.picks.length+' bet'+(S.picks.length!==1?'s':'');
-  if(!S.picks.length){b.innerHTML='<tr><td colspan="11" class="nd">No picks yet.</td></tr>';return;}
+  if(!S.picks.length){b.innerHTML='<tr><td colspan="14" class="nd">No picks yet.</td></tr>';return;}
   let run=0;
   b.innerHTML=S.picks.map((p,i)=>{
     if(p.rs!=='Pending')run+=p.uw;
     const rc=run>=0?'var(--green)':'var(--red)';
     const wc=p.uw>0?'var(--green)':p.uw<0?'var(--red)':'var(--muted)';
     return `<tr>
-      <td style="color:var(--muted)">${i+1}</td><td>${p.dt}</td>
-      <td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.tx}</td>
+      <td style="color:var(--muted)">${i+1}</td>
+      <td style="white-space:nowrap">${p.dt}</td>
+      <td style="font-weight:600">${p.tx||'—'}</td>
+      <td style="color:var(--muted)">${p.ha||'vs'} ${p.opp||'—'}</td>
+      <td style="color:var(--muted);font-size:10px;white-space:nowrap">${p.gt||'—'}</td>
       <td>${p.od>0?'+':''}${p.od}</td>
       <td style="color:var(--muted)">${p.xwp?p.xwp.toFixed(1)+'%':'—'}</td>
       <td style="color:${p.ed>=5?'var(--green)':p.ed>=3?'var(--yellow)':'var(--muted)'}">${p.ed>=0?'+':''}${p.ed.toFixed(1)}%</td>
@@ -1808,6 +1818,7 @@ function rPicks(){
       </select></td>
       <td style="color:${wc}">${p.rs==='Pending'?'—':(p.uw>0?'+':'')+p.uw.toFixed(2)+'u'}</td>
       <td style="color:${rc};font-weight:600">${p.rs!=='Pending'?(run>=0?'+':'')+run.toFixed(2)+'u':'—'}</td>
+      <td style="color:var(--muted);font-size:9px;white-space:nowrap">${p.tp||'—'}</td>
       <td><button class="btn bd" style="padding:3px 7px;font-size:9px" onclick="delPick(${p.id})">✕</button></td>
     </tr>`;
   }).join('');
@@ -2181,8 +2192,11 @@ function goToday(){
   el.valueAsDate = new Date();
   fetchMLBGames();
 }
-function logFromCard(gid, team, opp, odds, edgePct, xwpPct){
-  document.getElementById('p-tx').value = team + ' vs ' + opp;
+function logFromCard(gid, team, opp, odds, edgePct, xwpPct, gameTime, isHome){
+  document.getElementById('p-tx').value = team;
+  document.getElementById('p-opp').value = opp;
+  document.getElementById('p-ha').textContent = isHome ? 'vs' : '@';
+  document.getElementById('p-gt').value = gameTime || '';
   document.getElementById('p-od').value = odds;
   document.getElementById('p-xwp').value = xwpPct ? (+xwpPct).toFixed(2) : '';
   autoCalcEdge();
