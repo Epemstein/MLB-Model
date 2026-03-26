@@ -655,7 +655,6 @@ input[type=number] { -moz-appearance:textfield; }
     <button class="btn bg" onclick="shiftDate(1)" title="Next day" style="padding:6px 10px;font-size:14px;">›</button>
     <input type="date" id="game-date" style="width:130px;" onchange="fetchMLBGames()"/>
     <button class="btn bg" onclick="loadDemo()" style="font-size:11px;padding:6px 10px;">NYY @ SFG</button>
-    <button class="btn bg" id="proj-refresh-btn" onclick="fetchProjections()" style="font-size:11px;padding:6px 10px;" title="Fetch latest Steamer projections from FanGraphs">⟳ Projections</button>
     <button class="btn bp" id="fetch-btn" onclick="fetchMLBGames()">↻ Fetch</button>
     <button class="btn bg" onclick="S.games=[];save();rGames();">Clear</button>
     <span class="api-status" id="api-status"></span>
@@ -755,6 +754,7 @@ input[type=number] { -moz-appearance:textfield; }
   <div class="api-bar" style="margin-bottom:12px;">
     <input style="width:220px" type="text" id="ps-h" placeholder="Search player or team…" oninput="rProjH()"/>
     <span style="font-size:11px;color:var(--muted);margin-left:8px;" id="hitter-count"></span>
+    <button class="btn bg proj-refresh-btn" onclick="fetchProjections()" style="font-size:11px;padding:6px 10px;margin-left:8px;" title="Fetch latest Steamer projections from FanGraphs">⟳ Projections</button>
   </div>
   <div class="card" style="padding:0;overflow:hidden;">
     <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">
@@ -782,6 +782,7 @@ input[type=number] { -moz-appearance:textfield; }
   <div class="api-bar" style="margin-bottom:12px;">
     <input style="width:220px" type="text" id="ps-p" placeholder="Search player or team…" oninput="rProjP()"/>
     <span style="font-size:11px;color:var(--muted);margin-left:8px;" id="pitcher-count"></span>
+    <button class="btn bg proj-refresh-btn" onclick="fetchProjections()" style="font-size:11px;padding:6px 10px;margin-left:8px;" title="Fetch latest Steamer projections from FanGraphs">⟳ Projections</button>
   </div>
   <div class="card" style="padding:0;overflow:hidden;">
     <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">
@@ -2789,7 +2790,7 @@ const PROJ_LS_TS    = 'mlb_proj_ts';
 const PROJ_MAX_AGE  = 22 * 60 * 60 * 1000; // 22 hours
 
 async function fetchProjections(force=false){
-  const btn = document.getElementById('proj-refresh-btn');
+  const btns = document.querySelectorAll('.proj-refresh-btn');
   const cached = localStorage.getItem(PROJ_LS_KEY);
   const ts     = parseInt(localStorage.getItem(PROJ_LS_TS)||'0');
   const age    = Date.now() - ts;
@@ -2799,7 +2800,7 @@ async function fetchProjections(force=false){
     return;
   }
 
-  if(btn){ btn.textContent = '⟳ Fetching…'; btn.disabled = true; }
+  btns.forEach(b => { b.textContent = '⟳ Fetching…'; b.disabled = true; });
 
   try {
     const base = (typeof PROXY_BASE !== 'undefined') ? PROXY_BASE : '';
@@ -2823,7 +2824,7 @@ async function fetchProjections(force=false){
     console.error('Projection fetch failed:', e);
     toast('Projection fetch failed: ' + e.message, 'err');
   } finally {
-    if(btn){ btn.textContent = '⟳ Projections'; btn.disabled = false; }
+    btns.forEach(b => { b.textContent = '⟳ Projections'; b.disabled = false; });
   }
 }
 
