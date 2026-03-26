@@ -754,6 +754,7 @@ input[type=number] { -moz-appearance:textfield; }
   <div class="api-bar" style="margin-bottom:12px;">
     <input style="width:220px" type="text" id="ps-h" placeholder="Search player or team…" oninput="rProjH()"/>
     <span style="font-size:11px;color:var(--muted);margin-left:8px;" id="hitter-count"></span>
+    <button class="btn bg proj-refresh-btn" onclick="fetchProjections()" style="font-size:11px;padding:6px 10px;margin-left:8px;" title="Fetch latest Steamer projections from FanGraphs">⟳ Projections</button>
   </div>
   <div class="card" style="padding:0;overflow:hidden;">
     <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">
@@ -781,6 +782,7 @@ input[type=number] { -moz-appearance:textfield; }
   <div class="api-bar" style="margin-bottom:12px;">
     <input style="width:220px" type="text" id="ps-p" placeholder="Search player or team…" oninput="rProjP()"/>
     <span style="font-size:11px;color:var(--muted);margin-left:8px;" id="pitcher-count"></span>
+    <button class="btn bg proj-refresh-btn" onclick="fetchProjections()" style="font-size:11px;padding:6px 10px;margin-left:8px;" title="Fetch latest Steamer projections from FanGraphs">⟳ Projections</button>
   </div>
   <div class="card" style="padding:0;overflow:hidden;">
     <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">
@@ -2779,6 +2781,130 @@ document.addEventListener('click', function(e){
   e.stopPropagation();
   revertSP(btn.dataset.gid, btn.dataset.side);
 });
+
+// ═══════════════════════════════════════════════
+// LIVE STEAMER PROJECTION FETCH
+// ═══════════════════════════════════════════════
+const PROJ_LS_KEY   = 'mlb_proj_data';
+const PROJ_LS_TS    = 'mlb_proj_ts';
+const PROJ_MAX_AGE  = 22 * 60 * 60 * 1000; // 22 hours
+
+async function fetchProjections(force=false){
+  const btns = document.querySelectorAll('.proj-refresh-btn');
+  const cached = localStorage.getItem(PROJ_LS_KEY);
+  const ts     = parseInt(localStorage.getItem(PROJ_LS_TS)||'0');
+  const age    = Date.now() - ts;
+
+  if(!force && cached && age < PROJ_MAX_AGE){
+    applyProjections(JSON.parse(cached));
+    return;
+  }
+
+  btns.forEach(b => { b.textContent = '⟳ Fetching…'; b.disabled = true; });
+
+  try {
+    const base = (typeof PROXY_BASE !== 'undefined') ? PROXY_BASE : '';
+    const [batRes, pitRes] = await Promise.all([
+      fetch(`${base}/fg-proj/?type=steamer&stats=bat&pos=all&team=0&players=0&lg=all`),
+      fetch(`${base}/fg-proj/?type=steamer&stats=pit&pos=all&team=0&players=0&lg=all`),
+    ]);
+
+    if(!batRes.ok || !pitRes.ok) throw new Error(`HTTP ${batRes.status}/${pitRes.status}`);
+
+    const batData = await batRes.json();
+    const pitData = await pitRes.json();
+
+    const payload = { bat: batData, pit: pitData };
+    localStorage.setItem(PROJ_LS_KEY, JSON.stringify(payload));
+    localStorage.setItem(PROJ_LS_TS, String(Date.now()));
+
+    applyProjections(payload);
+    toast('Projections updated ✓');
+  } catch(e) {
+    console.error('Projection fetch failed:', e);
+    toast('Projection fetch failed: ' + e.message, 'err');
+  } finally {
+    btns.forEach(b => { b.textContent = '⟳ Projections'; b.disabled = false; });
+  }
+}
+
+function applyProjections(payload){
+  const { bat, pit } = payload;
+  if(!Array.isArray(bat) || !Array.isArray(pit)){ console.warn('Unexpected projection format', payload); return; }
+
+  // Map FG team abbreviations to our abbreviations
+  const FG_TEAM_MAP = {'SF':'SFG','SD':'SDP','KC':'KCR','TB':'TBR','WSH':'WSN','OAK':'ATH','CWS':'CHW','LAA':'LAA','LAD':'LAD'};
+  function fgTeam(t){ return FG_TEAM_MAP[t] || t; }
+
+  // Build new PROJ_HITTERS — need: name, team, g, pa, war
+  const newHitters = bat
+    .filter(p => p.WAR != null && p.PA != null)
+    .map(p => ({
+      name: p.PlayerName || p.Name || '',
+      team: fgTeam(p.Team || p.team || ''),
+      g:    Math.round(p.G || 0),
+      pa:   Math.round(p.PA || 0),
+      war:  parseFloat(p.WAR) || 0,
+    }))
+    .filter(p => p.name && p.pa > 0);
+
+  // Build new PROJ_PITCHERS — need: name, team, g, gs, ip, war
+  const newPitchers = pit
+    .filter(p => p.WAR != null && p.IP != null)
+    .map(p => ({
+      name: p.PlayerName || p.Name || '',
+      team: fgTeam(p.Team || p.team || ''),
+      g:    Math.round(p.G || 0),
+      gs:   Math.round(p.GS || 0),
+      ip:   parseFloat(p.IP) || 0,
+      war:  parseFloat(p.WAR) || 0,
+    }))
+    .filter(p => p.name && p.ip > 0);
+
+  if(newHitters.length < 100 || newPitchers.length < 50){
+    console.warn('Projection data looks incomplete', newHitters.length, newPitchers.length);
+    toast('Projection data incomplete — check console', 'err');
+    return;
+  }
+
+  // Replace global arrays in-place so all existing references update
+  PROJ_HITTERS.length = 0;
+  newHitters.forEach(p => PROJ_HITTERS.push(p));
+
+  PROJ_PITCHERS.length = 0;
+  newPitchers.forEach(p => PROJ_PITCHERS.push(p));
+
+  // Clear any IP overrides that referenced old data
+  // (keep them — player names should match)
+
+  console.log(`Projections applied: ${PROJ_HITTERS.length} hitters, ${PROJ_PITCHERS.length} pitchers`);
+
+  // Re-render open tabs
+  if(document.getElementById('panel-proj-h').classList.contains('active')) rProjH();
+  if(document.getElementById('panel-proj-p').classList.contains('active')) rProjP();
+  if(document.getElementById('panel-teams').classList.contains('active')) renderTeam(currentTeam);
+  rGames();
+}
+
+// On load: use cache if fresh, auto-fetch if stale or missing
+(function initProjections(){
+  const cached = localStorage.getItem(PROJ_LS_KEY);
+  const ts     = parseInt(localStorage.getItem(PROJ_LS_TS)||'0');
+  const fresh  = cached && (Date.now() - ts) < PROJ_MAX_AGE;
+  if(fresh){
+    try {
+      applyProjections(JSON.parse(cached));
+      console.log('Projections loaded from cache');
+    } catch(e) {
+      console.warn('Failed to load cached projections, re-fetching:', e);
+      fetchProjections(true);
+    }
+  } else {
+    // Stale or never fetched — auto-fetch in background
+    console.log('Projections stale or missing — auto-fetching...');
+    fetchProjections(true);
+  }
+})();
 </script>
 </body>
 </html>
