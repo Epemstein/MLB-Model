@@ -3421,35 +3421,61 @@ function setPresenceOffline(uid){
 }
 
 // ── Firestore sync ──
+function setupRealtimeListeners(){
+  // ── Picks: real-time listener ──
+  db.collection('picks').orderBy('id').onSnapshot(snap => {
+    S.picks = snap.docs.map(d => d.data());
+    rPicks(); rPerf();
+    console.log('Picks synced:', S.picks.length);
+  }, e => console.error('Picks listener error:', e));
+
+  // ── Games: real-time listener for today ──
+  const today = new Date().toISOString().slice(0,10);
+  db.collection('games').doc(today).onSnapshot(snap => {
+    if(snap.exists){ S.games = snap.data().games || []; rGames(); }
+  }, e => console.error('Games listener error:', e));
+
+  // ── Overrides: real-time listener ──
+  db.collection('overrides').doc('current').onSnapshot(snap => {
+    if(snap.exists){
+      const ov = snap.data();
+      if(ov.spOverrides) S.spOverrides = ov.spOverrides;
+      if(ov.ipOverrides) S.ipOverrides = ov.ipOverrides;
+    }
+  }, e => console.error('Overrides listener error:', e));
+
+  // ── Bankroll: real-time listener ──
+  db.collection('bankroll').doc('settings').onSnapshot(snap => {
+    if(snap.exists){ S.br = {...S.br, ...snap.data()}; loadBRUI(); rPerf(); }
+  }, e => console.error('Bankroll listener error:', e));
+}
+
 async function loadFromFirebase(){
   try {
-    // Load picks
-    const picksSnap = await db.collection('picks').orderBy('id').get();
-    S.picks = picksSnap.docs.map(d => d.data());
-
-    // Load games
+    // One-time load for initial render, then set up real-time listeners
     const today = new Date().toISOString().slice(0,10);
-    const gamesSnap = await db.collection('games').doc(today).get();
+    const [gamesSnap, ovSnap, brSnap] = await Promise.all([
+      db.collection('games').doc(today).get(),
+      db.collection('overrides').doc('current').get(),
+      db.collection('bankroll').doc('settings').get(),
+    ]);
     if(gamesSnap.exists) S.games = gamesSnap.data().games || [];
-
-    // Load overrides
-    const ovSnap = await db.collection('overrides').doc('current').get();
     if(ovSnap.exists){
       const ov = ovSnap.data();
       if(ov.spOverrides) S.spOverrides = ov.spOverrides;
       if(ov.ipOverrides) S.ipOverrides = ov.ipOverrides;
     }
-
-    // Load bankroll
-    const brSnap = await db.collection('bankroll').doc('settings').get();
     if(brSnap.exists) S.br = {...S.br, ...brSnap.data()};
 
-    // Also load from localStorage as fallback for projections etc
+    // Load projections from localStorage
     load();
 
-    // Render
-    rGames(); rPicks(); rPerf(); loadBRUI();
-    console.log('Firebase data loaded');
+    // Initial render
+    rGames(); rPerf(); loadBRUI();
+
+    // Now set up real-time listeners (picks included)
+    setupRealtimeListeners();
+    console.log('Firebase loaded, listeners active');
   } catch(e){
     console.error('Firebase load failed, falling back to localStorage:', e);
     load(); rGames(); rPicks(); rPerf(); loadBRUI();
