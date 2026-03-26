@@ -716,7 +716,7 @@ input[type=number] { -moz-appearance:textfield; }
     <div class="fr">
       <div class="fg"><label class="fl">Game Date</label><input type="date" id="p-dt"/></div>
       <div class="fg"><label class="fl">Game Time</label><input type="text" id="p-gt" placeholder="4:05 PM ET" readonly style="background:#f8f8f8;color:var(--muted)"/></div>
-      <div class="fg"><label class="fl">Pick</label><input type="text" id="p-tx" placeholder="NYY"/></div>
+      <div class="fg"><label class="fl">Pick</label><input type="text" id="p-tx" placeholder="NYY" oninput="updatePickLogo()"/></div>
       <div class="fg"><label class="fl" style="opacity:0">vs</label><div style="display:flex;align-items:center;gap:6px;padding-top:2px;"><span id="p-ha" style="font-size:11px;font-weight:600;color:var(--muted);min-width:20px;text-align:center;">vs</span><input type="text" id="p-opp" placeholder="SFG" style="flex:1"/></div></div>
       <div class="fg"><label class="fl">Odds</label><input type="number" id="p-od" placeholder="+130" oninput="autoCalcEdge()"/></div>
       <div class="fg"><label class="fl">xWP %</label><input type="number" id="p-xwp" placeholder="52.9" step="0.01" oninput="autoCalcEdge()" readonly style="background:#f8f8f8;color:var(--muted)"/></div>
@@ -726,7 +726,7 @@ input[type=number] { -moz-appearance:textfield; }
         <select id="p-rs"><option value="Pending">Pending</option><option value="Win">Win</option><option value="Loss">Loss</option></select>
       </div>
     </div>
-    <button class="btn bp" onclick="addPick()">+ Log Pick</button>
+    <button class="btn bp" onclick="addPick()" id="log-pick-btn" style="display:flex;align-items:center;gap:6px;min-width:130px;"><span style="display:inline-block;width:20px;height:20px;flex-shrink:0;"><img id="log-pick-logo" src="" style="width:20px;height:20px;object-fit:contain;display:none;" /></span>+ Log Pick</button>
   </div>
   <div class="card">
     <div class="ct">Pick Log <span id="p-ct" style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);"></span></div>
@@ -734,7 +734,7 @@ input[type=number] { -moz-appearance:textfield; }
       <button class="fb active" id="ptog-flat" onclick="setPickView('flat',this)">Flat (Units)</button>
       <button class="fb" id="ptog-kelly" onclick="setPickView('kelly',this)">Kelly (%)</button>
     </div>
-    <div class="sw"><table class="dt"><thead><tr><th style="width:28px">#</th><th style="width:28px"></th><th style="width:90px;white-space:nowrap">Placed</th><th style="width:70px">Date</th><th style="width:60px">Pick</th><th style="width:80px">Opp</th><th style="width:90px">Game Time</th><th style="width:60px">Odds</th><th style="width:45px">xWP</th><th style="width:55px">Edge</th><th style="width:55px" id="th-bet">Bet</th><th style="width:60px">Result</th><th style="width:65px" id="th-won">Won</th><th style="width:75px" id="th-run">Running</th><th style="width:28px"></th></tr></thead><tbody id="pb"><tr><td colspan="14" class="nd">No picks yet.</td></tr></tbody></table></div>
+    <div class="sw"><table class="dt"><thead><tr><th style="width:42px">Bet No.</th><th style="width:28px"></th><th style="width:90px;white-space:nowrap">Placed</th><th style="width:70px">Date</th><th style="width:60px">Pick</th><th style="width:80px">Opp</th><th style="width:90px">Game Time</th><th style="width:60px;text-align:right">Odds</th><th style="width:45px;text-align:right">xWP</th><th style="width:55px;text-align:right">Edge</th><th style="width:55px;text-align:right" id="th-bet">Bet</th><th style="width:60px">Result</th><th style="width:65px;text-align:right" id="th-won">Won</th><th style="width:75px;text-align:right" id="th-run">Running</th><th style="width:28px"></th></tr></thead><tbody id="pb"><tr><td colspan="14" class="nd">No picks yet.</td></tr></tbody></table></div>
   </div>
 </div>
 
@@ -768,7 +768,7 @@ input[type=number] { -moz-appearance:textfield; }
     </div>
     <div class="sw"><table class="dt" style="font-size:11px;">
       <thead><tr>
-        <th style="width:28px">#</th>
+        <th style="width:42px">Bet No.</th>
         <th>Player</th>
         <th>Team</th>
         <th style="text-align:right">G</th>
@@ -796,7 +796,7 @@ input[type=number] { -moz-appearance:textfield; }
     </div>
     <div class="sw"><table class="dt" style="font-size:11px;">
       <thead><tr>
-        <th style="width:28px">#</th>
+        <th style="width:42px">Bet No.</th>
         <th>Player</th>
         <th>Team</th>
         <th style="text-align:right">G</th>
@@ -1921,15 +1921,27 @@ function toggleDrawer(id){
 // PICKS
 // ═══════════════════════════════════════════════
 
-function calcKellyUnits(od, edge, brKelly, brMaxPct){
-  // Kelly: f = edge% / (decimal_odds - 1), scaled by kelly fraction, capped at maxPct
+function calcKellyUnits(od, edge){
+  // Full Kelly: f = edge% / (decimal_odds - 1)
   const dec = od >= 0 ? (od/100 + 1) : (100/Math.abs(od) + 1);
   const b = dec - 1;
   if(b <= 0 || edge <= 0) return 0;
-  const f = (edge/100) / b;
-  const kelly = f * (brKelly || 0.5);
-  const maxF = (brMaxPct || 3) / 100;
-  return Math.min(kelly, maxF) * 100; // return as units (assuming 1u = 1% of bankroll)
+  return ((edge/100) / b) * 100; // return as % of bankroll
+}
+
+
+function updatePickLogo(){
+  const abr = document.getElementById('p-tx').value.trim().toUpperCase();
+  const img = document.getElementById('log-pick-logo');
+  if(!img) return;
+  const url = teamLogo(abr);
+  if(abr && url){
+    img.src = url;
+    img.style.display = '';
+    img.onerror = function(){ this.style.display='none'; };
+  } else {
+    img.style.display = 'none';
+  }
 }
 
 function autoCalcEdge(){
@@ -1956,12 +1968,13 @@ function addPick(){
   if(!dt||!tx||isNaN(od)){toast('Fill date, pick, and odds.','err');return;}
   const imp = od>=0 ? 100/(od+100) : Math.abs(od)/(Math.abs(od)+100);
   const edFinal = !isNaN(ed) ? ed : (!isNaN(xwp) ? (xwp/100 - imp)*100 : 0);
-  const ku  = calcKellyUnits(od, edFinal, S.br.kelly, S.br.maxPct);
+  const ku  = calcKellyUnits(od, edFinal);
   const uw  = rs==='Win'?un*(aToDec(od)-1):rs==='Loss'?-un:0;
   const kuw = rs==='Win'?ku*(aToDec(od)-1):rs==='Loss'?-ku:0;
   S.picks.push({id:Date.now(),dt,gt,tx,opp,ha,od,ed:edFinal,xwp,un,ku,rs,uw,kuw,tp});
   save();rPicks();rPerf();
   ['p-tx','p-opp','p-od','p-xwp','p-ed','p-gt'].forEach(id=>document.getElementById(id).value='');
+  updatePickLogo();
   document.getElementById('p-ha').textContent='vs';
   document.getElementById('p-un').value='1';document.getElementById('p-rs').value='Pending';
   toast('Pick logged!');
@@ -1997,7 +2010,7 @@ function rPicks(){
     if(p.rs !== 'Pending'){ fwdRun += p.uw; fwdKRun += (p.kuw||0); }
     return { run: fwdRun, krun: fwdKRun };
   });
-  b.innerHTML=[...S.picks].map((p,i)=>({p, rt:runningTotals[i]})).reverse().map(({p,i,rt},{},arr)=>{
+  b.innerHTML=[...S.picks].map((p,i)=>({p, rt:runningTotals[i]})).reverse().map(({p,rt},i)=>{
     const run = rt.run, krun = rt.krun;
     const rc = (_pickView==='kelly'?krun:run)>=0?'var(--green)':'var(--red)';
     const isKelly = _pickView === 'kelly';
@@ -2016,7 +2029,7 @@ function rPicks(){
     const wc = isKelly ? (wonVal>0?'var(--green)':wonVal<0?'var(--red)':'var(--muted)')
                        : (p.uw>0?'var(--green)':p.uw<0?'var(--red)':'var(--muted)');
     return `<tr>
-      <td style="color:var(--muted);text-align:center">${i+1}</td>
+      <td style="color:var(--muted);text-align:center">${S.picks.length - i}</td>
       <td style="text-align:center"><button class="btn bg" style="padding:2px 6px;font-size:9px;" onclick="openEditPick(${p.id})">✎</button></td>
       <td style="color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${p.tp||'—'}</td>
       <td style="white-space:nowrap;font-size:11px">${p.dt}</td>
@@ -2433,6 +2446,7 @@ function logTeam(el){
 
 function logFromCard(gid, team, opp, odds, edgePct, xwpPct, gameTime, isHome){
   document.getElementById('p-tx').value = team;
+  updatePickLogo();
   document.getElementById('p-opp').value = opp;
   document.getElementById('p-ha').textContent = isHome ? 'vs' : '@';
   document.getElementById('p-gt').value = gameTime || '';
@@ -3270,7 +3284,7 @@ function saveEditPick(){
   p.un  = parseFloat(document.getElementById('ep-un').value) || 1;
   p.rs  = document.getElementById('ep-rs').value;
   // Recalc kelly and P&L
-  p.ku  = calcKellyUnits(p.od, p.ed, S.br.kelly, S.br.maxPct);
+  p.ku  = calcKellyUnits(p.od, p.ed);
   p.uw  = p.rs==='Win' ? p.un*(aToDec(p.od)-1) : p.rs==='Loss' ? -p.un : 0;
   p.kuw = p.rs==='Win' ? p.ku*(aToDec(p.od)-1) : p.rs==='Loss' ? -p.ku : 0;
   save();
