@@ -980,6 +980,33 @@ const NAME_TO_ABR = {
 };
 
 // Projected wins from Win Totals sheet
+
+// ─────────────────────────────────────────────────────────────
+// Dynamic projected wins — derived from PROJ_HITTERS + PROJ_PITCHERS
+// Formula:
+//   1. Team WAR = sum(hitter WAR) + sum(pitcher WAR) for that team
+//   2. League avg WAR = mean of all 30 teams
+//   3. Proj wins = 81 + (teamWAR - leagueAvg) * 1.15
+// Recalculated whenever projections update.
+// ─────────────────────────────────────────────────────────────
+const TEAMS_30 = ['ARI','ATH','ATL','BAL','BOS','CHC','CHW','CIN','CLE','COL','DET','HOU','KCR','LAA','LAD','MIA','MIL','MIN','NYM','NYY','PHI','PIT','SDP','SEA','SFG','STL','TBR','TEX','TOR','WSN'];
+
+function calcAllProjWins(){
+  const teamWAR = {};
+  for(const t of TEAMS_30) teamWAR[t] = 0;
+  for(const p of PROJ_HITTERS){ if(teamWAR[p.team] != null) teamWAR[p.team] += p.war||0; }
+  for(const p of PROJ_PITCHERS){ if(teamWAR[p.team] != null) teamWAR[p.team] += p.war||0; }
+  const vals = TEAMS_30.map(t => teamWAR[t]);
+  const avg = vals.reduce((a,b)=>a+b,0) / vals.length;
+  const result = {};
+  for(const t of TEAMS_30) result[t] = 81 + (teamWAR[t] - avg) * 1.15;
+  return result;
+}
+
+// Live projected wins lookup — call getProjWins(team) everywhere instead of PROJ_WINS[team]
+function getProjWins(team){ return _projWinsCache[team] || 81; }
+let _projWinsCache = calcAllProjWins();
+
 const PROJ_WINS={ARI:81.47877,ATH:77.256604,ATL:86.548022,BAL:86.401864,BOS:86.650902,CHC:83.040705,CHW:68.77289,CIN:75.879908,CLE:74.225252,COL:59.785286,DET:87.000474,HOU:83.54566,KCR:82.572585,LAA:72.054396,LAD:98.365096,MIA:73.511164,MIL:80.481384,MIN:78.889634,NYM:90.900117,NYY:90.781702,PHI:86.622831,PIT:77.396181,SDP:82.880638,SEA:88.817788,SFG:78.65034,STL:73.120863,TBR:80.027426,TEX:83.706046,TOR:90.913543,WSN:69.721929};
 
 // Rotation WAR totals from Rotations sheet
@@ -1591,7 +1618,7 @@ function modelCalc(g){
             totalHitterWar, hitterChange, totalChange, wins, winPct};
   }
 
-  const awBase = PROJ_WINS[aw]||81, hwBase = PROJ_WINS[hw]||81;
+  const awBase = getProjWins(aw), hwBase = getProjWins(hw);
 
   // Always look up current WAR/162 from PROJ_PITCHERS so IP/Start overrides take effect
   function liveSpWar162(team, spName, storedWar) {
@@ -2597,7 +2624,7 @@ function renderTeam(abr){
 
   const info = TEAM_INFO[abr] || {primary:'#1a3a5c', secondary:'#2c5282', name:abr, espn:abr.toLowerCase()};
   const full = info.name || TEAM_FULL[abr] || abr;
-  const projW = PROJ_WINS_ALL[abr] || 81;
+  const projW = getProjWins(abr);
   const col = info.primary;
 
   // Look up live record from standings data
@@ -2942,6 +2969,7 @@ function applyProjections(payload){
   // Clear any IP overrides that referenced old data
   // (keep them — player names should match)
 
+  _projWinsCache = calcAllProjWins();
   console.log(`Projections applied: ${PROJ_HITTERS.length} hitters, ${PROJ_PITCHERS.length} pitchers`);
 
   // Re-render open tabs
