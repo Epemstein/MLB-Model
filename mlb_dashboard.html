@@ -623,8 +623,33 @@ input[type=number] { -moz-appearance:textfield; }
 #odds-summary-table td, #odds-summary-table th { padding:3px 5px; }
 .odds-team-cell:hover { filter: brightness(0.92); transition: filter .1s; }
 </style>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 </head>
 <body>
+
+
+<div id="login-screen" style="display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#1a3a5c 0%,#2c5282 100%);align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:40px 48px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3);max-width:360px;width:90%;">
+    <div style="font-size:28px;font-weight:800;color:#1a3a5c;letter-spacing:.04em;margin-bottom:4px;">MLB ALGO</div>
+    <div style="font-size:12px;color:#999;letter-spacing:.1em;text-transform:uppercase;margin-bottom:32px;">2026 Season</div>
+    <button onclick="signInWithGoogle()" style="display:flex;align-items:center;gap:12px;width:100%;padding:12px 20px;border:1px solid #e0e0e0;border-radius:6px;background:#fff;cursor:pointer;font-size:14px;font-weight:500;color:#333;box-shadow:0 1px 4px rgba(0,0,0,.1);justify-content:center;">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20" height="20" />
+      Sign in with Google
+    </button>
+    <div id="login-error" style="margin-top:12px;font-size:12px;color:#c62828;display:none;"></div>
+  </div>
+</div>
+
+<!-- Online presence indicator in header -->
+<div id="presence-bar" style="display:none;position:fixed;bottom:12px;right:12px;z-index:9000;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 12px;box-shadow:0 2px 8px rgba(0,0,0,.12);font-size:11px;min-width:120px;">
+  <div style="font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;font-size:9px;margin-bottom:6px;">Online</div>
+  <div id="presence-list"></div>
+</div>
 
 <header>
   <div class="logo">MLB<em> / </em>ALGO<em style="font-size:12px;"> 2026</em></div>
@@ -1073,7 +1098,7 @@ const PROXY_BASE = isLocal ? `${window.location.protocol}//${window.location.hos
 // STORE
 // ═══════════════════════════════════════════════
 const S={games:[],spOverrides:{},ipOverrides:{},picks:[],br:{start:10000,unit:100,kelly:0.5,maxPct:3},apiKey:'',lastFetch:null};
-function save(){try{localStorage.setItem('mlb26v3',JSON.stringify(S));}catch(e){}}
+function save(){try{localStorage.setItem('mlb26v3',JSON.stringify(S));}catch(e){} saveToFirebase();}
 function load(){
   try{
     const d=JSON.parse(localStorage.getItem('mlb26v3')||'{}');
@@ -1975,8 +2000,11 @@ function addPick(){
   const ku  = calcKellyUnits(od, edFinal);
   const uw  = rs==='Win'?un*(aToDec(od)-1):rs==='Loss'?-un:0;
   const kuw = rs==='Win'?ku*(aToDec(od)-1):rs==='Loss'?-ku:0;
-  S.picks.push({id:Date.now(),dt,gt,tx,opp,ha,od,ed:edFinal,xwp,un,ku,rs,uw,kuw,tp});
-  save();rPicks();rPerf();
+  const newPick={id:Date.now(),dt,gt,tx,opp,ha,od,ed:edFinal,xwp,un,ku,rs,uw,kuw,tp};
+  S.picks.push(newPick);
+  savePickToFirebase(newPick);
+  localStorage.setItem('mlb26v3',JSON.stringify(S));
+  rPicks();rPerf();
   ['p-tx','p-opp','p-od','p-xwp','p-ed','p-gt'].forEach(id=>document.getElementById(id).value='');
   updatePickLogo();
   document.getElementById('p-ha').textContent='vs';
@@ -1997,7 +2025,7 @@ function setPickView(view, btn){
   rPicks();
 }
 
-function delPick(id){S.picks=S.picks.filter(p=>p.id!==id);save();rPicks();rPerf();}
+function delPick(id){S.picks=S.picks.filter(p=>p.id!==id);deletePickFromFirebase(id);localStorage.setItem('mlb26v3',JSON.stringify(S));rPicks();rPerf();}
 function updPick(id,rs){
   const p=S.picks.find(p=>p.id===id);if(!p)return;
   p.rs=rs;p.uw=rs==='Win'?p.un*(aToDec(p.od)-1):rs==='Loss'?-p.un:0;
@@ -3291,7 +3319,8 @@ function saveEditPick(){
   p.ku  = calcKellyUnits(p.od, p.ed);
   p.uw  = p.rs==='Win' ? p.un*(aToDec(p.od)-1) : p.rs==='Loss' ? -p.un : 0;
   p.kuw = p.rs==='Win' ? p.ku*(aToDec(p.od)-1) : p.rs==='Loss' ? -p.ku : 0;
-  save();
+  savePickToFirebase(p);
+  localStorage.setItem('mlb26v3',JSON.stringify(S));
   closeEditPick();
   rPicks();
   rPerf();
@@ -3304,6 +3333,155 @@ document.addEventListener('DOMContentLoaded', function(){
     if(e.target === this) closeEditPick();
   });
 });
+
+// ═══════════════════════════════════════════════
+// FIREBASE
+// ═══════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey: "AIzaSyC2pfd0YtSDf2Ybj6X-uHv7owzZKqn7pmA",
+  authDomain: "mlb-algo-b8923.firebaseapp.com",
+  databaseURL: "https://mlb-algo-b8923-default-rtdb.firebaseio.com",
+  projectId: "mlb-algo-b8923",
+  storageBucket: "mlb-algo-b8923.firebasestorage.app",
+  messagingSenderId: "120593689531",
+  appId: "1:120593689531:web:ae2b2afa087e58eedb729e"
+};
+firebase.initializeApp(firebaseConfig);
+const db   = firebase.firestore();
+const rtdb = firebase.database();
+const auth = firebase.auth();
+
+let _currentUser = null;
+
+// ── Auth ──
+function signInWithGoogle(){
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(e => {
+    const el = document.getElementById('login-error');
+    el.textContent = e.message; el.style.display = '';
+  });
+}
+
+function signOut(){
+  if(_currentUser) setPresenceOffline(_currentUser.uid);
+  auth.signOut();
+}
+
+auth.onAuthStateChanged(user => {
+  if(user){
+    _currentUser = user;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('presence-bar').style.display = '';
+    // Save/update user profile
+    db.collection('users').doc(user.uid).set({
+      name: user.displayName,
+      email: user.email,
+      photo: user.photoURL,
+      lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+    }, {merge: true});
+    setupPresence(user);
+    loadFromFirebase();
+  } else {
+    _currentUser = null;
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('presence-bar').style.display = 'none';
+  }
+});
+
+// ── Presence ──
+function setupPresence(user){
+  const presenceRef = rtdb.ref('presence/' + user.uid);
+  const connRef = rtdb.ref('.info/connected');
+  connRef.on('value', snap => {
+    if(!snap.val()) return;
+    presenceRef.onDisconnect().remove();
+    presenceRef.set({
+      name: user.displayName,
+      photo: user.photoURL,
+      online: true,
+      ts: firebase.database.ServerValue.TIMESTAMP
+    });
+  });
+  // Listen to all presence
+  rtdb.ref('presence').on('value', snap => {
+    const users = snap.val() || {};
+    const list = document.getElementById('presence-list');
+    list.innerHTML = Object.values(users).map(u =>
+      `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <img src="${u.photo||''}" width="18" height="18" style="border-radius:50%;object-fit:cover;" onerror="this.style.display='none'" />
+        <span style="font-size:11px;color:var(--text)">${u.name?.split(' ')[0]||'?'}</span>
+        <span style="width:7px;height:7px;border-radius:50%;background:#2e7d32;margin-left:auto;flex-shrink:0;"></span>
+      </div>`
+    ).join('') || '<div style="color:var(--muted);font-size:10px;">Just you</div>';
+  });
+}
+
+function setPresenceOffline(uid){
+  rtdb.ref('presence/' + uid).remove();
+}
+
+// ── Firestore sync ──
+async function loadFromFirebase(){
+  try {
+    // Load picks
+    const picksSnap = await db.collection('picks').orderBy('id').get();
+    S.picks = picksSnap.docs.map(d => d.data());
+
+    // Load games
+    const today = new Date().toISOString().slice(0,10);
+    const gamesSnap = await db.collection('games').doc(today).get();
+    if(gamesSnap.exists) S.games = gamesSnap.data().games || [];
+
+    // Load overrides
+    const ovSnap = await db.collection('overrides').doc('current').get();
+    if(ovSnap.exists){
+      const ov = ovSnap.data();
+      if(ov.spOverrides) S.spOverrides = ov.spOverrides;
+      if(ov.ipOverrides) S.ipOverrides = ov.ipOverrides;
+    }
+
+    // Load bankroll
+    const brSnap = await db.collection('bankroll').doc('settings').get();
+    if(brSnap.exists) S.br = {...S.br, ...brSnap.data()};
+
+    // Also load from localStorage as fallback for projections etc
+    load();
+
+    // Render
+    rGames(); rPicks(); rPerf(); loadBRUI();
+    console.log('Firebase data loaded');
+  } catch(e){
+    console.error('Firebase load failed, falling back to localStorage:', e);
+    load(); rGames(); rPicks(); rPerf(); loadBRUI();
+  }
+}
+
+async function saveToFirebase(){
+  if(!_currentUser) return;
+  try {
+    const today = new Date().toISOString().slice(0,10);
+    // Save games
+    await db.collection('games').doc(today).set({ games: S.games, updated: firebase.firestore.FieldValue.serverTimestamp() });
+    // Save overrides
+    await db.collection('overrides').doc('current').set({ spOverrides: S.spOverrides, ipOverrides: S.ipOverrides, updated: firebase.firestore.FieldValue.serverTimestamp() });
+    // Save bankroll
+    await db.collection('bankroll').doc('settings').set({...S.br, updated: firebase.firestore.FieldValue.serverTimestamp()});
+  } catch(e){
+    console.error('Firebase save failed:', e);
+  }
+}
+
+async function savePickToFirebase(pick){
+  if(!_currentUser) return;
+  try {
+    await db.collection('picks').doc(String(pick.id)).set({...pick, savedBy: _currentUser.uid});
+  } catch(e){ console.error('Pick save failed:', e); }
+}
+
+async function deletePickFromFirebase(id){
+  if(!_currentUser) return;
+  try { await db.collection('picks').doc(String(id)).delete(); } catch(e){}
+}
 </script>
 
 <!-- ══ EDIT PICK MODAL ══ -->
