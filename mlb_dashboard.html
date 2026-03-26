@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MLB ALGO 2026</title>
+<title>v1 MLB ALGO 2026</title>
 
 <style>
 
@@ -2555,7 +2555,7 @@ function logFromCard(gid, team, opp, odds, edgePct, xwpPct, gameTime, isHome){
   document.getElementById('p-xwp').value = xwpPct ? (+xwpPct).toFixed(2) : '';
   autoCalcEdge();
   showPanel('picks', document.querySelector('nav button:nth-child(2)'));
-  toast('Pick pre-filled — confirm and log it!');
+
 }
 
 // ═══════════════════════════════════════════════
@@ -3590,8 +3590,9 @@ async function loadFromFirebase(){
     // Initial render
     rGames(); rPerf(); loadBRUI();
 
-    // Now set up real-time listeners (picks included)
+    // Now set up real-time listeners (picks + activity)
     setupRealtimeListeners();
+    loadActivityLog(); // Start activity listener immediately on login
     console.log('Firebase loaded, listeners active');
   } catch(e){
     console.error('Firebase load failed, falling back to localStorage:', e);
