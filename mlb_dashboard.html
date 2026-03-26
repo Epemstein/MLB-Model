@@ -2533,10 +2533,10 @@ function revertSP(gid, side){
 function onDateChange(){
   const date = getActiveDate();
   localStorage.setItem('mlb_active_date', date);
-  S.games = []; // Clear immediately — new date has its own games
+  S.games = []; // Clear immediately while we load the new date
   rGames();
-  subscribeToGamesDate(date); // Re-subscribe to new date (works even before fetch)
-  fetchMLBGames();
+  subscribeToGamesDate(date); // Load from Firestore — no API fetch
+  // fetchMLBGames() is NOT called here — user fetches manually if needed
 }
 
 function shiftDate(days){
