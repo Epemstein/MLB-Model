@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>v1 MLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -1688,6 +1688,19 @@ function setSP(gameId, field, val){
 // ═══════════════════════════════════════════════
 // MATH ENGINE — mirrors Stage sheet logic
 // ═══════════════════════════════════════════════
+
+// Units risked: favorites risk more than 1u, underdogs risk 1u
+// Favorite (negative odds): risk = 100/abs(odds) units to win 1u
+// Underdog (positive odds): risk = 1u to win odds/100 units
+function calcRisk(od, un){
+  return od < 0 ? un * (100 / Math.abs(od)) : un;
+}
+function calcWon(od, un, rs){
+  if(rs !== 'Win' && rs !== 'Loss') return 0;
+  if(rs === 'Loss') return -calcRisk(od, un); // lose what was risked
+  return od >= 0 ? un * (od/100) : un; // Win: underdogs win od/100 per unit, favorites win 1u per unit bet
+}
+
 function aToDec(o){o=+o;return o>=0?(o/100+1):(100/Math.abs(o)+1);}
 function impl(o){o=+o;return o>=0?100/(o+100):Math.abs(o)/(Math.abs(o)+100);}
 function fmtO(o){o=+o;return o>0?`+${o}`:String(o);}
@@ -2058,8 +2071,8 @@ function addPick(){
   const imp = od>=0 ? 100/(od+100) : Math.abs(od)/(Math.abs(od)+100);
   const edFinal = !isNaN(ed) ? ed : (!isNaN(xwp) ? (xwp/100 - imp)*100 : 0);
   const ku  = calcKellyUnits(od, edFinal);
-  const uw  = rs==='Win'?un*(aToDec(od)-1):rs==='Loss'?-un:0;
-  const kuw = rs==='Win'?ku*(aToDec(od)-1):rs==='Loss'?-ku:0;
+  const uw  = calcWon(od, un, rs);
+  const kuw = calcWon(od, ku, rs);
   const newPick={id:Date.now(),dt,gt,tx,opp,ha,od,ed:edFinal,xwp,un,ku,rs,uw,kuw,tp};
   S.picks.push(newPick);
   savePickToFirebase(newPick);
@@ -2090,8 +2103,7 @@ function delPick(id){const dp=S.picks.find(p=>p.id===id);if(dp)logActivity(`Dele
 function updPick(id,rs){
   const p=S.picks.find(p=>p.id===id);if(!p)return;
   const oldRs = p.rs;
-  p.rs=rs;p.uw=rs==='Win'?p.un*(aToDec(p.od)-1):rs==='Loss'?-p.un:0;
-  p.kuw=rs==='Win'?(p.ku||0)*(aToDec(p.od)-1):rs==='Loss'?-(p.ku||0):0;
+  p.rs=rs;p.uw=calcWon(p.od,p.un,rs);p.kuw=calcWon(p.od,p.ku||0,rs);
   savePickToFirebase(p);
   logActivity(`Marked pick ${p.tx} as ${rs} (was ${oldRs})`, p.tx);
   localStorage.setItem('mlb26v3',JSON.stringify(S));
@@ -3428,8 +3440,8 @@ function saveEditPick(){
   p.rs  = document.getElementById('ep-rs').value;
   // Recalc kelly and P&L
   p.ku  = calcKellyUnits(p.od, p.ed);
-  p.uw  = p.rs==='Win' ? p.un*(aToDec(p.od)-1) : p.rs==='Loss' ? -p.un : 0;
-  p.kuw = p.rs==='Win' ? p.ku*(aToDec(p.od)-1) : p.rs==='Loss' ? -p.ku : 0;
+  p.uw  = calcWon(p.od, p.un, p.rs);
+  p.kuw = calcWon(p.od, p.ku||0, p.rs);
   savePickToFirebase(p);
   logActivity(`Edited pick: ${p.tx} ${p.od>0?'+':''}${p.od} → ${p.rs}`, p.tx);
   localStorage.setItem('mlb26v3',JSON.stringify(S));
