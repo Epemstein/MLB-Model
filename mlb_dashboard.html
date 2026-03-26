@@ -1630,13 +1630,17 @@ function modelCalc(g){
     // 4. Pitcher Change = Pitcher Value - Rotation
     const pitcherChange = pitcherValue - rotation;
 
-    // 5. Hitter Change = Projected Starters - Weighted Avg WAR/PA
-    //    Wtd Avg WAR/PA derived live from PROJ_HITTERS (updates with projections)
+    // 5. Hitter Change = Projected Starters - Weighted Avg WAR/162 × 9
+    //    WAR/162 = (pa/g) * (war/pa) * 162
+    //    Weighted by each hitter's PA share, then × 9 for lineup
     const teamName = team === 'aw' ? g.away : g.home;
     const liveHitters = PROJ_HITTERS.filter(p => p.team === teamName);
     const totalTeamPA = liveHitters.reduce((s,p)=>s+(p.pa||0), 0);
     const totalHitterWar = totalTeamPA > 0
-      ? liveHitters.reduce((s,p)=> s + ((p.pa > 0 ? p.war/p.pa : 0) * ((p.pa||0) / totalTeamPA)), 0) * 9
+      ? liveHitters.reduce((s,p)=> {
+          const war162 = p.g > 0 ? (p.pa/p.g) * (p.pa > 0 ? p.war/p.pa : 0) * 162 : 0;
+          return s + war162 * ((p.pa||0) / totalTeamPA);
+        }, 0) * 9
       : 0;
     const hitterChange = projStarters - totalHitterWar;
 
