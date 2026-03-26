@@ -1979,7 +1979,7 @@ function updGStats(calcs){
       <td style="${f}text-align:right;${awBg}color:#000">${fmtO(g.awayOdds)}</td>
       <td style="${f}text-align:right;${awBg}color:var(--accent)">${fmtO(r.awMO)}</td>
       <td data-edge="${gid}-aw" style="${f}text-align:right;font-weight:700;color:#000;${awBg}">${awEdge>=0?'+':''}${ae}%</td>
-    </tr><tr>
+    </tr><tr style="border-bottom:2px solid var(--border);">
       <td style="${f}color:#000;font-weight:600;${hwBg}">
         <img src="${teamLogo(g.home)}" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display='none'" />
         ${g.home}
@@ -2461,6 +2461,7 @@ function showPanel(name,btn){
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
   document.getElementById('panel-'+name).classList.add('active');
   if(btn)btn.classList.add('active');
+  if(name==='games')rGames();
   if(name==='perf')rCharts();
   if(name==='teams'){initTeamBtns();renderTeam(currentTeam);}
   if(name==='proj-h')rProjH();
