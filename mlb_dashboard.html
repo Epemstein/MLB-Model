@@ -716,7 +716,7 @@ input[type=number] { -moz-appearance:textfield; }
     <button class="btn bg" onclick="shiftDate(-1)" title="Previous day" style="padding:6px 10px;font-size:14px;">‹</button>
     <button class="btn bg" onclick="goToday()" style="font-size:11px;padding:6px 10px;">Today</button>
     <button class="btn bg" onclick="shiftDate(1)" title="Next day" style="padding:6px 10px;font-size:14px;">›</button>
-    <input type="date" id="game-date" style="width:130px;" onchange="fetchMLBGames()"/>
+    <input type="date" id="game-date" style="width:130px;" onchange="onDateChange()"/>
     <button class="btn bp" id="fetch-btn" onclick="fetchMLBGames()">↻ Fetch</button>
     <button class="btn bg" onclick="S.games=[];save();rGames();">Clear</button>
     <span class="api-status" id="api-status"></span>
@@ -2523,6 +2523,13 @@ function revertSP(gid, side){
   logActivity(`Reverted ${revertTeam} SP: removed ${revertedSP}, restored ${restoredSP||'original'}`, revertTeam);
   save(); rGames();
 }
+function onDateChange(){
+  const date = getActiveDate();
+  localStorage.setItem('mlb_active_date', date);
+  if(_gamesUnsub) subscribeToGamesDate(date); // re-subscribe if Firebase is ready
+  fetchMLBGames();
+}
+
 function shiftDate(days){
   const el = document.getElementById('game-date');
   const d = el.value ? new Date(el.value + 'T12:00:00') : new Date();
@@ -3082,7 +3089,12 @@ if(S.games.length && S.games[0].awaySpWar===undefined){
 const today=new Date();
 document.getElementById('hdr-date').textContent=today.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toUpperCase();
 document.getElementById('p-dt').valueAsDate=today;
-document.getElementById('game-date').valueAsDate=today;
+const _savedDate = localStorage.getItem('mlb_active_date');
+if(_savedDate){
+  document.getElementById('game-date').value = _savedDate;
+} else {
+  document.getElementById('game-date').valueAsDate=today;
+}
 if(S.apiKey) document.getElementById('api-key').value=S.apiKey;
 if(S.lastFetch) document.getElementById('hdr-fetch').textContent=S.lastFetch;
 loadBRUI();
@@ -3532,17 +3544,19 @@ function setPresenceOffline(uid){
 }
 
 // ── Firestore sync ──
-function setupRealtimeListeners(){
-  // ── Picks: real-time listener ──
-  db.collection('picks').orderBy('id').onSnapshot(snap => {
-    S.picks = snap.docs.map(d => d.data());
-    rPicks(); rPerf();
-    console.log('Picks synced:', S.picks.length);
-  }, e => console.error('Picks listener error:', e));
 
-  // ── Games: real-time listener for today ──
-  const today = new Date().toISOString().slice(0,10);
-  db.collection('games').doc(today).onSnapshot(snap => {
+// ── Per-user active date (local only, not synced) ──
+function getActiveDate(){
+  return document.getElementById('game-date')?.value || new Date().toISOString().slice(0,10);
+}
+
+let _gamesUnsub = null;
+
+function subscribeToGamesDate(date){
+  // Unsubscribe from previous date
+  if(_gamesUnsub){ _gamesUnsub(); _gamesUnsub = null; }
+  // Subscribe to new date
+  _gamesUnsub = db.collection('games').doc(date).onSnapshot(snap => {
     if(snap.exists && !_suppressGamesListener){
       const dbGames = snap.data().games || [];
       const local = JSON.parse(localStorage.getItem('mlb26v3')||'{}');
@@ -3552,8 +3566,23 @@ function setupRealtimeListeners(){
         return lg ? {...g, myAwOdds: lg.myAwOdds, myHwOdds: lg.myHwOdds} : g;
       });
       rGames();
+    } else if(!snap.exists && !_suppressGamesListener){
+      // No data for this date yet — clear games
+      S.games = [];
+      rGames();
     }
   }, e => console.error('Games listener error:', e));
+}
+
+function setupRealtimeListeners(){
+  // ── Picks: real-time listener ──
+  db.collection('picks').orderBy('id').onSnapshot(snap => {
+    S.picks = snap.docs.map(d => d.data());
+    rPicks(); rPerf();
+    console.log('Picks synced:', S.picks.length);
+  }, e => console.error('Picks listener error:', e));
+
+  // ── Games: subscribed via subscribeToGamesDate() called from loadFromFirebase ──
 
   // ── Overrides: real-time listener ──
   db.collection('overrides').doc('current').onSnapshot(snap => {
@@ -3573,7 +3602,7 @@ function setupRealtimeListeners(){
 async function loadFromFirebase(){
   try {
     // One-time load for initial render, then set up real-time listeners
-    const today = new Date().toISOString().slice(0,10);
+    const today = getActiveDate();
     const [gamesSnap, ovSnap, brSnap] = await Promise.all([
       db.collection('games').doc(today).get(),
       db.collection('overrides').doc('current').get(),
@@ -3605,6 +3634,7 @@ async function loadFromFirebase(){
 
     // Now set up real-time listeners (picks + activity)
     setupRealtimeListeners();
+    subscribeToGamesDate(getActiveDate());
     loadActivityLog(); // Start activity listener immediately on login
     console.log('Firebase loaded, listeners active');
   } catch(e){
@@ -3621,7 +3651,7 @@ function stripUndefined(obj){
 async function saveToFirebase(){
   if(!_currentUser) return;
   try {
-    const today = new Date().toISOString().slice(0,10);
+    const today = getActiveDate();
     // Save games
     // Strip per-user myOdds before saving — each user keeps their own locally
     const gamesForDB = S.games.map(g => {
