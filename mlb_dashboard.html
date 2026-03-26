@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>v3 MLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -1573,7 +1573,6 @@ async function fetchOdds(){
     logActivity(`Fetched lineups: ${S.games.length} games loaded`);
     rGames();
     logActivity(`Fetched lineups: ${S.games.length} games loaded`);
-    toast(`${S.games.length} games loaded from Odds API!`);
   }catch(err){
     console.error(err);
     status.className='api-status err';
@@ -2415,7 +2414,6 @@ function doSwap(playerName, s600, war){
   logActivity(`Edited ${swapCtx.team} lineup: swapped in ${playerName} for ${outName}`);
   closeSwapModal();
   rGames();
-  toast(`Swapped in ${playerName}`);
 }
 
 function revertSwap(gid, side, slotIdx){
@@ -2496,7 +2494,7 @@ function doSpSwap(name, war162){
   save();
   closeSwapModal();
   rGames();
-  toast(`SP changed to ${name}`);
+  logActivity(`Changed SP to ${name}`);
 }
 
 function spSubLabel(gid, side){
@@ -2757,7 +2755,18 @@ function showPanel(name,btn){
   if(name==='standings'){fetchStandings();}
   if(name==='activity'){loadActivityLog();}
 }
-function toast(msg,type){const el=document.getElementById('toast');el.textContent=msg;el.className='toast'+(type==='err'?' err':'')+' show';setTimeout(()=>el.classList.remove('show'),2500);}
+function toast(msg, type){
+  const container = document.getElementById('activity-toast-container');
+  if(!container){ console.log('toast:', msg); return; }
+  const item = document.createElement('div');
+  item.className = 'activity-toast-item';
+  item.style.borderLeftColor = type === 'err' ? 'var(--red)' : 'var(--accent)';
+  item.innerHTML = `<div class="at-action" style="color:${type==='err'?'var(--red)':'var(--text)'}">${msg}</div>`;
+  container.appendChild(item);
+  void item.offsetHeight;
+  item.classList.add('show');
+  setTimeout(() => { item.classList.remove('show'); setTimeout(() => item.remove(), 350); }, 3000);
+}
 
 // ═══════════════════════════════════════════════
 // INIT
