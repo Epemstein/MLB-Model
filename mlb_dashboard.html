@@ -2671,9 +2671,10 @@ function renderTeam(abr){
       <tbody>${rotRows || '<tr><td colspan="9" class="nd">No data</td></tr>'}</tbody>
     </table>`;
 
-  // Bullpen: GS = 0, sorted by WAR desc
+  // Bullpen: everyone not in the rotation (catches swingmen and spot starters too)
+  const rotationNames = new Set(rotation.map(p => p.name));
   const bullpen = teamPitchers
-    .filter(p => p.gs === 0)
+    .filter(p => !rotationNames.has(p.name))
     .map(p => ({...p, war162: getPitcherWar162(p)}))
     .sort((a,b) => b.war - a.war);
   const bpRows = bullpen.map((p,i) => `<tr>
