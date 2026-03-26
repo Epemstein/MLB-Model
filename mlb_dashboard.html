@@ -2814,7 +2814,16 @@ async function fetchProjections(force=false){
     const batData = await batRes.json();
     const pitData = await pitRes.json();
 
-    const payload = { bat: batData, pit: pitData };
+    // Slim to only needed fields before storing — avoids localStorage quota (~5MB limit)
+    const FG_TEAM_MAP_SLIM = {'SF':'SFG','SD':'SDP','KC':'KCR','TB':'TBR','WSH':'WSN','OAK':'ATH','CWS':'CHW'};
+    const ft = t => FG_TEAM_MAP_SLIM[t] || t;
+    const slimBat = batData
+      .filter(p => (parseFloat(p.PA)||0) >= 10)
+      .map(p => [p.PlayerName||p.Name||'', ft(p.Team||''), Math.round(p.G||0), Math.round(p.PA||0), parseFloat(p.WAR)||0]);
+    const slimPit = pitData
+      .filter(p => (parseFloat(p.IP)||0) > 0)
+      .map(p => [p.PlayerName||p.Name||'', ft(p.Team||''), Math.round(p.G||0), Math.round(p.GS||0), parseFloat(p.IP)||0, parseFloat(p.WAR)||0]);
+    const payload = { bat: slimBat, pit: slimPit, slim: true };
     localStorage.setItem(PROJ_LS_KEY, JSON.stringify(payload));
     localStorage.setItem(PROJ_LS_TS, String(Date.now()));
 
@@ -2836,30 +2845,22 @@ function applyProjections(payload){
   const FG_TEAM_MAP = {'SF':'SFG','SD':'SDP','KC':'KCR','TB':'TBR','WSH':'WSN','OAK':'ATH','CWS':'CHW','LAA':'LAA','LAD':'LAD'};
   function fgTeam(t){ return FG_TEAM_MAP[t] || t; }
 
-  // Build new PROJ_HITTERS — need: name, team, g, pa, war
-  const newHitters = bat
-    .filter(p => p.WAR != null && p.PA != null)
-    .map(p => ({
-      name: p.PlayerName || p.Name || '',
-      team: fgTeam(p.Team || p.team || ''),
-      g:    Math.round(p.G || 0),
-      pa:   Math.round(p.PA || 0),
-      war:  parseFloat(p.WAR) || 0,
-    }))
-    .filter(p => p.name && p.pa > 0);
-
-  // Build new PROJ_PITCHERS — need: name, team, g, gs, ip, war
-  const newPitchers = pit
-    .filter(p => p.WAR != null && p.IP != null)
-    .map(p => ({
-      name: p.PlayerName || p.Name || '',
-      team: fgTeam(p.Team || p.team || ''),
-      g:    Math.round(p.G || 0),
-      gs:   Math.round(p.GS || 0),
-      ip:   parseFloat(p.IP) || 0,
-      war:  parseFloat(p.WAR) || 0,
-    }))
-    .filter(p => p.name && p.ip > 0);
+  let newHitters, newPitchers;
+  if(payload.slim){
+    // Slim format: arrays of [name, team, g, pa, war] / [name, team, g, gs, ip, war]
+    newHitters  = bat.map(r => ({name:r[0], team:r[1], g:r[2], pa:r[3], war:r[4]})).filter(p => p.name && p.pa >= 10);
+    newPitchers = pit.map(r => ({name:r[0], team:r[1], g:r[2], gs:r[3], ip:r[4], war:r[5]})).filter(p => p.name && p.ip > 0);
+  } else {
+    // Full FG object format (direct from API before slimming)
+    newHitters = bat
+      .filter(p => p.WAR != null && (parseFloat(p.PA)||0) >= 10)
+      .map(p => ({name: p.PlayerName||p.Name||'', team: fgTeam(p.Team||p.team||''), g: Math.round(p.G||0), pa: Math.round(p.PA||0), war: parseFloat(p.WAR)||0}))
+      .filter(p => p.name);
+    newPitchers = pit
+      .filter(p => p.WAR != null && (parseFloat(p.IP)||0) > 0)
+      .map(p => ({name: p.PlayerName||p.Name||'', team: fgTeam(p.Team||p.team||''), g: Math.round(p.G||0), gs: Math.round(p.GS||0), ip: parseFloat(p.IP)||0, war: parseFloat(p.WAR)||0}))
+      .filter(p => p.name);
+  }
 
   if(newHitters.length < 100 || newPitchers.length < 50){
     console.warn('Projection data looks incomplete', newHitters.length, newPitchers.length);
