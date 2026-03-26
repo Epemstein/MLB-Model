@@ -1113,10 +1113,11 @@ function normName(name){
 
 // Look up a player in TEAM_DATA by normalized name
 function findHitter(teamAbr, mlbName){
-  const td = TEAM_DATA[teamAbr];
-  if(!td) return null;
   const key = normName(mlbName);
-  return td.hitters.find(h => normName(h.name) === key) || null;
+  const p = PROJ_HITTERS.find(h => h.team === teamAbr && normName(h.name) === key);
+  if(!p) return null;
+  const war162 = p.g > 0 ? (p.pa/p.g)*(p.pa>0?p.war/p.pa:0)*162 : 0;
+  return {...p, war162};
 }
 
 function findPitcher(teamAbr, mlbName){
@@ -1158,13 +1159,13 @@ function parseMLBGame(game){
     lineupOverrides = {};
     awPlayers.slice(0,9).forEach((p,i)=>{
       const found = findHitter(aw, p.person?.fullName || p.fullName || '');
-      if(found) lineupOverrides[`aw_${i}`] = {name: found.name, s600: found.s600, war: found.war};
-      else lineupOverrides[`aw_${i}`] = {name: p.person?.fullName || p.fullName || '?', s600: 0, war: 0};
+      if(found) lineupOverrides[`aw_${i}`] = {name: found.name, war162: found.war162, war: found.war};
+      else lineupOverrides[`aw_${i}`] = {name: p.person?.fullName || p.fullName || '?', war162: 0, war: 0};
     });
     hwPlayers.slice(0,9).forEach((p,i)=>{
       const found = findHitter(hw, p.person?.fullName || p.fullName || '');
-      if(found) lineupOverrides[`hw_${i}`] = {name: found.name, s600: found.s600, war: found.war};
-      else lineupOverrides[`hw_${i}`] = {name: p.person?.fullName || p.fullName || '?', s600: 0, war: 0};
+      if(found) lineupOverrides[`hw_${i}`] = {name: found.name, war162: found.war162, war: found.war};
+      else lineupOverrides[`hw_${i}`] = {name: p.person?.fullName || p.fullName || '?', war162: 0, war: 0};
     });
   }
 
@@ -1296,14 +1297,14 @@ function applyFanGraphsLineups(games, fgGames){
         if(game.lineupOverrides[`aw_${i}`]?.manual) return; // keep manual swaps
         const found = findHitter(awAbr, p.PlayerName);
         game.lineupOverrides[`aw_${i}`] = found
-          ? {name: found.name, s600: found.s600, war: found.war}
+          ? {name: found.name, war162: found.war162, war: found.war}
           : {name: p.PlayerName, s600: 0, war: 0};
       });
       hwPlayers.slice(0,9).forEach((p, i) => {
         if(game.lineupOverrides[`hw_${i}`]?.manual) return;
         const found = findHitter(hwAbr, p.PlayerName);
         game.lineupOverrides[`hw_${i}`] = found
-          ? {name: found.name, s600: found.s600, war: found.war}
+          ? {name: found.name, war162: found.war162, war: found.war}
           : {name: p.PlayerName, s600: 0, war: 0};
       });
 
@@ -1624,8 +1625,9 @@ function modelCalc(g){
       lineup = lineup.map((p,i) => {
         const ov = overrides[`${team==='aw'?'aw':'hw'}_${i}`];
         if(!ov) return p;
-        const ovP = PROJ_HITTERS.find(h => h.name === ov.name) || p;
-        const war162 = ovP.g > 0 ? (ovP.pa/ovP.g)*(ovP.pa>0?ovP.war/ovP.pa:0)*162 : 0;
+        // war162 already computed when override was created via findHitter
+        const war162 = ov.war162 != null ? ov.war162
+          : (()=>{ const ovP = PROJ_HITTERS.find(h=>h.name===ov.name)||p; return ovP.g>0?(ovP.pa/ovP.g)*(ovP.pa>0?ovP.war/ovP.pa:0)*162:0; })();
         return {...p, name:ov.name, war:ov.war, war162};
       });
     }
