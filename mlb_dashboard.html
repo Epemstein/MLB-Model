@@ -726,7 +726,7 @@ input[type=number] { -moz-appearance:textfield; }
         <select id="p-rs"><option value="Pending">Pending</option><option value="Win">Win</option><option value="Loss">Loss</option></select>
       </div>
     </div>
-    <button class="btn" onclick="addPick()" id="log-pick-btn" style="display:flex;align-items:center;gap:8px;min-width:160px;padding:8px 16px;font-size:13px;font-weight:600;background:linear-gradient(to right,#5ba8f5,#1a6fb5);color:#fff;border:none;border-radius:5px;box-shadow:3px 3px 8px rgba(0,0,0,.2);cursor:pointer;"><span style="display:inline-block;width:26px;height:26px;flex-shrink:0;"><img id="log-pick-logo" src="" style="width:26px;height:26px;object-fit:contain;display:none;" /></span>+ Log Pick</button>
+    <button class="btn" onclick="addPick()" id="log-pick-btn" style="display:flex;align-items:center;gap:0;min-width:160px;padding:8px 16px;font-size:13px;font-weight:600;background:linear-gradient(to right,#e8f3ff,#c5dff8);color:#1a3a5c;border:1px solid #a8c8ee;border-radius:5px;box-shadow:3px 3px 8px rgba(0,0,0,.15);cursor:pointer;"><span style="display:inline-block;width:26px;height:26px;flex-shrink:0;"><img id="log-pick-logo" src="" style="width:26px;height:26px;object-fit:contain;display:none;" /></span><span style="margin-left:8px;">+ Log Pick</span></button>
   </div>
   <div class="card">
     <div class="ct">Pick Log <span id="p-ct" style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);"></span></div>
@@ -1759,16 +1759,20 @@ function rGames(){
 
     // Lineup rows — display WAR/162
     const mkRows = (lu, team, side, gid) => (lu||[]).map((p,i)=>{
-      const w=n(p.war162||p.war);
-      const warCls=w>=5?'hi':'';
+      const isTBD = !p.name || p.name === '—' || p.name === 'TBD' || p.name === '?';
+      const w = isTBD ? 0 : n(p.war162||p.war);
+      const warCls = w>=5?'hi':'';
       const isSub = !!(g.lineupOverrides && g.lineupOverrides[`${side}_${i}`]?.manual);
-      const rowStyle = isSub ? 'cursor:pointer;background:#fff3cd;border-left:3px solid #e6a817;' : 'cursor:pointer;';
+      const rowStyle = isTBD
+        ? 'cursor:pointer;background:#fff0f0;border-left:3px solid #e57373;'
+        : isSub ? 'cursor:pointer;background:#fff3cd;border-left:3px solid #e6a817;'
+        : 'cursor:pointer;';
       const subLabel = isSub ? '<span style="font-size:9px;color:var(--red);font-weight:600;margin-left:4px;">sub</span>' : '';
       const revertBtn = isSub ? `<span onclick="event.stopPropagation();revertSwap('${gid}','${side}',${i})" title="Revert to original" style="margin-left:5px;cursor:pointer;color:#bbb;font-size:10px;line-height:1;" onmouseover="this.style.color='#666'" onmouseout="this.style.color='#bbb'">↺</span>` : '';
       return `<div class="lineup-row" onclick="openSwapModal('${gid}','${team}','${side}',${i})" style="${rowStyle}" title="Click to swap player">
         <span class="lineup-num">${i+1}.</span>
         <span class="lineup-name">${p.name||'—'}${subLabel}${revertBtn}</span>
-        <span class="lineup-war ${warCls}">${w.toFixed(2)}</span>
+        <span class="lineup-war ${warCls}">${isTBD ? '—' : w.toFixed(2)}</span>
       </div>`;
     }).join('');
 
@@ -2033,7 +2037,7 @@ function rPicks(){
       <td style="text-align:center"><button class="btn bg" style="padding:2px 6px;font-size:9px;" onclick="openEditPick(${p.id})">✎</button></td>
       <td style="color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${p.tp||'—'}</td>
       <td style="white-space:nowrap;font-size:11px">${p.dt}</td>
-      <td style="font-weight:600">${p.tx||'—'}</td>
+      <td style="font-weight:600;white-space:nowrap"><img src="${teamLogo(p.tx)}" width="16" height="16" style="object-fit:contain;vertical-align:middle;margin-right:4px;" onerror="this.style.display='none'" />${p.tx||'—'}</td>
       <td style="color:var(--muted)">${p.ha||'vs'} ${p.opp||'—'}</td>
       <td style="color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${p.gt||'—'}</td>
       <td style="text-align:right">${p.od>0?'+':''}${p.od}</td>
