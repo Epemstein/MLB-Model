@@ -3623,8 +3623,9 @@ function showActivityToast(name, action){
   item.className = 'activity-toast-item';
   item.innerHTML = `<div class="at-user">${(name||'?').split(' ')[0]}</div><div class="at-action">${action}</div>`;
   container.appendChild(item);
-  // Trigger animation
-  requestAnimationFrame(() => requestAnimationFrame(() => item.classList.add('show')));
+  // Force reflow then show
+  void item.offsetHeight;
+  item.classList.add('show');
   // Fade out and remove after 4s
   setTimeout(() => {
     item.classList.remove('show');
