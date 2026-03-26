@@ -621,6 +621,7 @@ input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
 input[type=number] { -moz-appearance:textfield; }
 #odds-summary-table td, #odds-summary-table th { padding:3px 5px; }
+.odds-team-cell:hover { filter: brightness(0.92); transition: filter .1s; }
 </style>
 </head>
 <body>
@@ -1990,20 +1991,25 @@ function rPicks(){
   const b=document.getElementById('pb');
   document.getElementById('p-ct').textContent=S.picks.length+' bet'+(S.picks.length!==1?'s':'');
   if(!S.picks.length){b.innerHTML='<tr><td colspan="14" class="nd">No picks yet.</td></tr>';return;}
-  let run=0;
-  b.innerHTML=S.picks.map((p,i)=>{
-    if(p.rs!=='Pending') run += _pickView==='kelly' ? (p.kuw||0) : p.uw;
-    const rc = run>=0?'var(--green)':'var(--red)';
+  // Pre-calculate running totals forward, then reverse for display
+  let fwdRun = 0, fwdKRun = 0;
+  const runningTotals = S.picks.map(p => {
+    if(p.rs !== 'Pending'){ fwdRun += p.uw; fwdKRun += (p.kuw||0); }
+    return { run: fwdRun, krun: fwdKRun };
+  });
+  b.innerHTML=[...S.picks].map((p,i)=>({p, rt:runningTotals[i]})).reverse().map(({p,i,rt},{},arr)=>{
+    const run = rt.run, krun = rt.krun;
+    const rc = (_pickView==='kelly'?krun:run)>=0?'var(--green)':'var(--red)';
     const isKelly = _pickView === 'kelly';
     const start = S.br.start || 10000;
     // Flat: units bet/won/running
     // Kelly: % of bankroll bet, $ won, $ running
     const betStr  = isKelly ? (p.ku?p.ku.toFixed(2)+'%':'—') : p.un+'u';
     const wonVal  = isKelly ? (p.kuw||0)*start/100 : p.uw;
-    const runVal  = isKelly ? run*start/100 : run;
+    const runVal  = isKelly ? krun*start/100 : run;
     const wonStr  = p.rs==='Pending' ? '—' : isKelly
-      ? (wonVal>=0?'+':'')+'$'+Math.abs(wonVal).toFixed(0)
-      : (p.uw>0?'+':'')+p.uw.toFixed(2)+'u';
+      ? (wonVal>=0?'+':'-')+'$'+Math.abs(wonVal).toFixed(0)
+      : (p.uw>=0?'+':'')+p.uw.toFixed(2)+'u';
     const runStr  = p.rs==='Pending' ? '—' : isKelly
       ? (runVal>=0?'+':'')+'$'+Math.abs(runVal).toFixed(0)
       : (run>=0?'+':'')+run.toFixed(2)+'u';
@@ -2112,23 +2118,25 @@ function updGStats(calcs){
         <div style="font-weight:600;color:var(--text)">${game}${lineupDot}</div>
         <div style="font-size:10px;margin-top:2px;">${r.gameTime||''}</div>
       </td>
-      <td style="${f}color:#000;font-weight:600;${awBg}">
+      <td style="${f}color:#000;font-weight:600;${awBg}cursor:pointer;" title="Click to log bet" onclick="logTeam(this)" data-gid="${gid}" data-team="${g.away}" data-opp="${g.home}" data-edge="${ae}" data-xwp="${(n(r.awWP)*100).toFixed(2)}" data-time="${r.gameTime||''}" data-home="false" data-fallback="${g.myAwOdds||g.awayOdds}" class="odds-team-cell">
         <img src="${teamLogo(g.away)}" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display='none'" />
         ${g.away}
       </td>
       <td style="${f}text-align:right;${awBg}"><input type="text" inputmode="numeric" value="${awMyOdds}"
         style="width:44px;font-family:Calibri,sans-serif;font-size:11px;text-align:right;border:1px solid var(--border2);border-radius:3px;padding:1px 3px;background:transparent;"
+        data-gid="${gid}" data-side="aw"
         oninput="setMyOdds('${gid}','aw',this.value)" /></td>
       <td style="${f}text-align:right;${awBg}color:#000">${fmtO(g.awayOdds)}</td>
       <td style="${f}text-align:right;${awBg}color:var(--accent)">${fmtO(r.awMO)}</td>
       <td data-edge="${gid}-aw" style="${f}text-align:right;font-weight:700;color:#000;${awBg}">${awEdge>=0?'+':''}${ae}%</td>
     </tr><tr style="border-bottom:2px solid var(--border);">
-      <td style="${f}color:#000;font-weight:600;${hwBg}">
+      <td style="${f}color:#000;font-weight:600;${hwBg}cursor:pointer;" title="Click to log bet" onclick="logTeam(this)" data-gid="${gid}" data-team="${g.home}" data-opp="${g.away}" data-edge="${he}" data-xwp="${(n(r.hwWP)*100).toFixed(2)}" data-time="${r.gameTime||''}" data-home="true" data-fallback="${g.myHwOdds||g.homeOdds}" class="odds-team-cell">
         <img src="${teamLogo(g.home)}" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display='none'" />
         ${g.home}
       </td>
       <td style="${f}text-align:right;${hwBg}"><input type="text" inputmode="numeric" value="${hwMyOdds}"
         style="width:44px;font-family:Calibri,sans-serif;font-size:11px;text-align:right;border:1px solid var(--border2);border-radius:3px;padding:1px 3px;background:transparent;"
+        data-gid="${gid}" data-side="hw"
         oninput="setMyOdds('${gid}','hw',this.value)" /></td>
       <td style="${f}text-align:right;${hwBg}color:#000">${fmtO(g.homeOdds)}</td>
       <td style="${f}text-align:right;${hwBg}color:var(--accent)">${fmtO(r.hwMO)}</td>
@@ -2408,6 +2416,21 @@ function goToday(){
   el.valueAsDate = new Date();
   fetchMLBGames();
 }
+
+function logTeam(el){
+  const gid      = el.dataset.gid;
+  const team     = el.dataset.team;
+  const opp      = el.dataset.opp;
+  const edge     = parseFloat(el.dataset.edge);
+  const xwp      = el.dataset.xwp;
+  const gameTime = el.dataset.time;
+  const isHome   = el.dataset.home === 'true';
+  const side     = isHome ? 'hw' : 'aw';
+  const inp      = document.querySelector(`[data-gid="${gid}"][data-side="${side}"]`);
+  const od       = (inp && inp.value) ? parseFloat(inp.value) : parseFloat(el.dataset.fallback);
+  logFromCard(gid, team, opp, od, edge, xwp, gameTime, isHome);
+}
+
 function logFromCard(gid, team, opp, odds, edgePct, xwpPct, gameTime, isHome){
   document.getElementById('p-tx').value = team;
   document.getElementById('p-opp').value = opp;
