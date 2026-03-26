@@ -2905,10 +2905,10 @@ async function fetchProjections(force=false){
     const ft = t => FG_TEAM_MAP_SLIM[t] || t;
     const slimBat = batData
       .filter(p => (parseFloat(p.PA)||0) >= 10)
-      .map(p => [p.PlayerName||p.Name||'', ft(p.Team||''), Math.round(p.G||0), Math.round(p.PA||0), parseFloat(p.WAR)||0, p.xMLBAMID||p.mlbamid||0]);
+      .map(p => [p.PlayerName||p.Name||'', ft(p.Team||''), parseFloat(p.G)||0, parseFloat(p.PA)||0, parseFloat(p.WAR)||0, p.xMLBAMID||p.mlbamid||0]);
     const slimPit = pitData
       .filter(p => (parseFloat(p.IP)||0) >= 5)
-      .map(p => [p.PlayerName||p.Name||'', ft(p.Team||''), Math.round(p.G||0), Math.round(p.GS||0), parseFloat(p.IP)||0, parseFloat(p.WAR)||0, p.xMLBAMID||p.mlbamid||0]);
+      .map(p => [p.PlayerName||p.Name||'', ft(p.Team||''), parseFloat(p.G)||0, parseFloat(p.GS)||0, parseFloat(p.IP)||0, parseFloat(p.WAR)||0, p.xMLBAMID||p.mlbamid||0]);
 
     console.log('Slim data:', slimBat.length, 'hitters,', slimPit.length, 'pitchers');
 
@@ -2948,11 +2948,11 @@ function applyProjections(payload){
     // Full FG object format (direct from API before slimming)
     newHitters = bat
       .filter(p => p.WAR != null && (parseFloat(p.PA)||0) >= 10)
-      .map(p => ({name: p.PlayerName||p.Name||'', team: fgTeam(p.Team||p.team||''), g: Math.round(p.G||0), pa: Math.round(p.PA||0), war: parseFloat(p.WAR)||0}))
+      .map(p => ({name: p.PlayerName||p.Name||'', team: fgTeam(p.Team||p.team||''), g: parseFloat(p.G)||0, pa: parseFloat(p.PA)||0, war: parseFloat(p.WAR)||0}))
       .filter(p => p.name);
     newPitchers = pit
       .filter(p => p.WAR != null && (parseFloat(p.IP)||0) >= 5)
-      .map(p => ({name: p.PlayerName||p.Name||'', team: fgTeam(p.Team||p.team||''), g: Math.round(p.G||0), gs: Math.round(p.GS||0), ip: parseFloat(p.IP)||0, war: parseFloat(p.WAR)||0}))
+      .map(p => ({name: p.PlayerName||p.Name||'', team: fgTeam(p.Team||p.team||''), g: parseFloat(p.G)||0, gs: parseFloat(p.GS)||0, ip: parseFloat(p.IP)||0, war: parseFloat(p.WAR)||0}))
       .filter(p => p.name);
   }
 
