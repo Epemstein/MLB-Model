@@ -1003,6 +1003,43 @@ function calcAllProjWins(){
   return result;
 }
 
+
+// ─────────────────────────────────────────────────────────────
+// Team hitter weighted WAR/162
+// Weighted average of each hitter's WAR/162, weighted by PA%
+// ─────────────────────────────────────────────────────────────
+function getTeamHitterWAR162(team, overrides){
+  let hitters = PROJ_HITTERS.filter(p => p.team === team);
+  const totalPA = hitters.reduce((s,p) => s + (p.pa||0), 0);
+  if(!totalPA) return 0;
+
+  // Apply lineup overrides if provided (swap players)
+  if(overrides){
+    // Build top-9 by war, then apply overrides
+    const sorted = [...hitters].sort((a,b) => b.war - a.war).slice(0,9);
+    const side = overrides['aw_0'] != null ? 'aw' : 'hw';
+    const lineup = sorted.map((p,i) => {
+      const ov = overrides[`${side}_${i}`];
+      return ov ? {pa: p.pa, war: ov.war, g: p.g} : p;
+    });
+    // Weighted avg WAR/162 for lineup only
+    const lineupPA = lineup.reduce((s,p) => s + (p.pa||0), 0);
+    if(!lineupPA) return 0;
+    return lineup.reduce((s,p) => {
+      const war162 = p.g > 0 ? (p.pa/p.g) * (p.pa > 0 ? p.war/p.pa : 0) * 162 : 0;
+      return s + war162 * ((p.pa||0) / lineupPA);
+    }, 0);
+  }
+
+  // Full roster weighted avg
+  return hitters.reduce((s,p) => {
+    const paG   = p.g > 0 ? p.pa / p.g : 0;
+    const warPA = p.pa > 0 ? p.war / p.pa : 0;
+    const war162 = paG * warPA * 162;
+    return s + war162 * ((p.pa||0) / totalPA);
+  }, 0);
+}
+
 // Live projected wins lookup — call getProjWins(team) everywhere instead of PROJ_WINS[team]
 let _projWinsCache = null;
 function getProjWins(team){
@@ -1571,20 +1608,17 @@ function modelCalc(g){
   const awTD=TEAM_DATA[aw]||{}, hwTD=TEAM_DATA[hw]||{};
 
   function stageCalc(team, td, spWar162, projWins, overrides, isHome){
-    // 1. Projected Starters = sum of top-9 hitters' Steamer600 WAR
+    // 1. Projected Starters = sum of top-9 hitters' s600 WAR × 1.08
     let lineup = (td.hitters||[])
       .filter(p=>p.s600 && p.war>0)
       .sort((a,b)=>b.war-a.war)
       .slice(0,9);
-
-    // Apply any player swap overrides
     if(overrides){
       lineup = lineup.map((p,i)=>{
         const ov = overrides[`${team==='aw'?'aw':'hw'}_${i}`];
         return ov ? {name:ov.name, s600:ov.s600, war:ov.war} : p;
       });
     }
-    // 1. Projected Starters = sum of top-9 hitters' Steamer600 WAR × 1.08
     const projStarters = lineup.reduce((s,p)=>s+(p.s600||0), 0) * 1.08;
 
     // 2. Rotation = rotation_total from team sheet
@@ -1596,13 +1630,13 @@ function modelCalc(g){
     // 4. Pitcher Change = Pitcher Value - Rotation
     const pitcherChange = pitcherValue - rotation;
 
-    // 5. Hitter Change = (7/9) * (Projected Starters - Weighted Avg WAR/PA)
-    //    Weighted Avg WAR/PA = sum(s600 * pa_share) * 9, where pa_share = player_pa / total_team_pa
-    //    Calculated live from PA + s600 so it updates when projections change
-    const allHitters = td.hitters || [];
-    const totalTeamPA = allHitters.reduce((s,p)=>s+(p.pa||0), 0);
+    // 5. Hitter Change = Projected Starters - Weighted Avg WAR/PA
+    //    Wtd Avg WAR/PA derived live from PROJ_HITTERS (updates with projections)
+    const teamName = team === 'aw' ? g.away : g.home;
+    const liveHitters = PROJ_HITTERS.filter(p => p.team === teamName);
+    const totalTeamPA = liveHitters.reduce((s,p)=>s+(p.pa||0), 0);
     const totalHitterWar = totalTeamPA > 0
-      ? allHitters.reduce((s,p)=> s + ((p.s600||0) * ((p.pa||0) / totalTeamPA)), 0) * 9
+      ? liveHitters.reduce((s,p)=> s + ((p.pa > 0 ? p.war/p.pa : 0) * ((p.pa||0) / totalTeamPA)), 0) * 9
       : 0;
     const hitterChange = projStarters - totalHitterWar;
 
@@ -1615,8 +1649,6 @@ function modelCalc(g){
     // 8. Win % = Wins / 162  (home team gets +7% for home field advantage)
     const winPct = (wins / 162) * (isHome ? 1.07 : 1.0);
 
-    // 9. Game Score = (Win% - 0.5) / 0.6
-    // gameScore returned without opp — calculated after both teams are known
     return {lineup, projStarters, rotation, pitcherValue, pitcherChange,
             totalHitterWar, hitterChange, totalChange, wins, winPct};
   }
@@ -2648,7 +2680,7 @@ function renderTeam(abr){
   document.getElementById('tm-logo-bg').src = teamLogo(abr);
 
   // Stat pills — white on colored banner
-  const hWAR = d.total_hitter_war || 0;
+  const hWAR = getTeamHitterWAR162(abr);
   const rotWAR = d.rotation_total || 0;
   const totalWAR = hWAR + rotWAR;
   const gr = liveGP > 0 ? (162 - liveGP) : d.games_remaining;
@@ -2659,7 +2691,7 @@ function renderTeam(abr){
 
   document.getElementById('tm-stats-row').innerHTML = `
     <div style="${pillStyle}"><div style="${lblStyle}">Proj Wins</div><div style="${valStyle}">${projW}</div><div style="${subStyle}">2026</div></div>
-    <div style="${pillStyle}"><div style="${lblStyle}">Hitter WAR</div><div style="${valStyle}">${hWAR.toFixed(1)}</div><div style="${subStyle}">weighted</div></div>
+    <div style="${pillStyle}"><div style="${lblStyle}">Hitter WAR/162</div><div style="${valStyle}">${hWAR.toFixed(2)}</div><div style="${subStyle}">wtd avg</div></div>
     <div style="${pillStyle}"><div style="${lblStyle}">Rotation WAR</div><div style="${valStyle}">${rotWAR.toFixed(1)}</div><div style="${subStyle}">top 5</div></div>
     <div style="${pillStyle}"><div style="${lblStyle}">Total WAR</div><div style="${valStyle}">${totalWAR.toFixed(1)}</div><div style="${subStyle}">h + rot</div></div>
     ${gr ? `<div style="${pillStyle}"><div style="${lblStyle}">Gm Rem</div><div style="${valStyle}">${gr}</div><div style="${subStyle}">of 162</div></div>` : ''}
