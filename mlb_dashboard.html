@@ -781,7 +781,7 @@ input[type=number] { -moz-appearance:textfield; }
       <div class="fg"><label class="fl">Odds</label><input type="number" id="p-od" placeholder="+130" oninput="autoCalcEdge()"/></div>
       <div class="fg"><label class="fl">xWP %</label><input type="number" id="p-xwp" placeholder="52.9" step="0.01" oninput="autoCalcEdge()" readonly style="background:#f8f8f8;color:var(--muted)"/></div>
       <div class="fg"><label class="fl">Edge %</label><input type="number" id="p-ed" placeholder="auto" step="0.01" readonly style="background:#f8f8f8;color:var(--muted)"/></div>
-      <div class="fg"><label class="fl">1u Units</label><input type="number" id="p-un" value="1" step="0.5"/></div>
+      <div class="fg"><label class="fl">Risk (u)</label><input type="number" id="p-un" value="1" step="0.5"/></div>
       <div class="fg"><label class="fl">Result</label>
         <select id="p-rs"><option value="Pending">Pending</option><option value="Win">Win</option><option value="Loss">Loss</option></select>
       </div>
@@ -1689,16 +1689,14 @@ function setSP(gameId, field, val){
 // MATH ENGINE — mirrors Stage sheet logic
 // ═══════════════════════════════════════════════
 
-// Units risked: favorites risk more than 1u, underdogs risk 1u
-// Favorite (negative odds): risk = 100/abs(odds) units to win 1u
-// Underdog (positive odds): risk = 1u to win odds/100 units
-function calcRisk(od, un){
-  return od < 0 ? un * (100 / Math.abs(od)) : un;
-}
+// un = units RISKED (always)
+// Favorite -163, risk 1.63u → win 1u  (win = risk * 100/abs(odds))
+// Underdog +130, risk 1u   → win 1.3u (win = risk * odds/100)
+function calcRisk(od, un){ return un; } // risk is just un
 function calcWon(od, un, rs){
   if(rs !== 'Win' && rs !== 'Loss') return 0;
-  if(rs === 'Loss') return -calcRisk(od, un); // lose what was risked
-  return od >= 0 ? un * (od/100) : un; // Win: underdogs win od/100 per unit, favorites win 1u per unit bet
+  if(rs === 'Loss') return -un;
+  return od >= 0 ? un * (od/100) : un * (100/Math.abs(od));
 }
 
 function aToDec(o){o=+o;return o>=0?(o/100+1):(100/Math.abs(o)+1);}
@@ -2049,10 +2047,16 @@ function updatePickLogo(){
 function autoCalcEdge(){
   const od = parseFloat(document.getElementById('p-od').value);
   const xwp = parseFloat(document.getElementById('p-xwp').value);
-  if(!isNaN(od) && !isNaN(xwp)){
-    const imp = od>=0 ? 100/(od+100) : Math.abs(od)/(Math.abs(od)+100);
-    const edge = (xwp/100 - imp)*100;
-    document.getElementById('p-ed').value = edge.toFixed(2);
+  if(!isNaN(od)){
+    // Auto-set risk units: favorites default to abs(odds)/100, underdogs default to 1
+    const unEl = document.getElementById('p-un');
+    const defaultRisk = od < 0 ? (Math.abs(od)/100).toFixed(2) : '1';
+    unEl.value = defaultRisk;
+    if(!isNaN(xwp)){
+      const imp = od>=0 ? 100/(od+100) : Math.abs(od)/(Math.abs(od)+100);
+      const edge = (xwp/100 - imp)*100;
+      document.getElementById('p-ed').value = edge.toFixed(2);
+    }
   }
 }
 function addPick(){
