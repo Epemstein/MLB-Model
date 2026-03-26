@@ -2649,20 +2649,26 @@ function renderTeam(abr){
     .sort((a,b) => b.gs - a.gs)
     .slice(0, 5);
 
-  const rotRows = rotation.map((p,i) => `<tr>
+  const rotRows = rotation.map((p,i) => {
+    const ipStart = getIpStart(p);
+    const warIP   = p.ip > 0 ? p.war / p.ip : 0;
+    return `<tr>
     <td style="color:var(--muted)">${i+1}</td>
     <td style="white-space:nowrap">${p.mlbamid ? `<img src="https://img.mlbstatic.com/mlb-photos/image/upload/w_60,q_80/v1/people/${p.mlbamid}/headshot/67/current" width="24" height="24" style="border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />` : ''}${p.name}</td>
-    <td style="text-align:right;font-family:var(--mono)">${p.g}</td>
-    <td style="text-align:right;font-family:var(--mono)">${p.gs}</td>
-    <td style="text-align:right;font-family:var(--mono)">${p.ip}</td>
+    <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${p.g}</td>
+    <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${p.gs}</td>
+    <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${p.ip}</td>
     <td style="text-align:right;font-family:var(--mono);font-weight:600">${p.war.toFixed(2)}</td>
+    <td style="text-align:right;font-family:var(--mono);${S.ipOverrides[pitcherKey(p)]!=null?'background:#fff3cd;font-weight:600;':''}">${ipStart.toFixed(2)}</td>
+    <td style="text-align:right;font-family:var(--mono)">${warIP.toFixed(4)}</td>
     <td style="text-align:right;font-family:var(--mono)">${p.war162.toFixed(2)}</td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 
   document.getElementById('tm-rotation').innerHTML = `
     <table class="dt">
-      <thead><tr><th>#</th><th>Starter</th><th style="text-align:right">G</th><th style="text-align:right">GS</th><th style="text-align:right">IP</th><th style="text-align:right">WAR</th><th style="text-align:right">WAR/162</th></tr></thead>
-      <tbody>${rotRows || '<tr><td colspan="7" class="nd">No data</td></tr>'}</tbody>
+      <thead><tr><th>#</th><th>Starter</th><th style="text-align:right">G</th><th style="text-align:right">GS</th><th style="text-align:right">IP</th><th style="text-align:right">WAR</th><th style="text-align:right">IP/Start</th><th style="text-align:right">WAR/IP</th><th style="text-align:right">WAR/162</th></tr></thead>
+      <tbody>${rotRows || '<tr><td colspan="9" class="nd">No data</td></tr>'}</tbody>
     </table>`;
 
   // Bullpen: GS = 0, sorted by WAR desc
