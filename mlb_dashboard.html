@@ -1004,8 +1004,11 @@ function calcAllProjWins(){
 }
 
 // Live projected wins lookup — call getProjWins(team) everywhere instead of PROJ_WINS[team]
-function getProjWins(team){ return _projWinsCache[team] || 81; }
-let _projWinsCache = calcAllProjWins();
+let _projWinsCache = null;
+function getProjWins(team){
+  if(!_projWinsCache) _projWinsCache = calcAllProjWins();
+  return _projWinsCache[team] || 81;
+}
 
 const PROJ_WINS={ARI:81.47877,ATH:77.256604,ATL:86.548022,BAL:86.401864,BOS:86.650902,CHC:83.040705,CHW:68.77289,CIN:75.879908,CLE:74.225252,COL:59.785286,DET:87.000474,HOU:83.54566,KCR:82.572585,LAA:72.054396,LAD:98.365096,MIA:73.511164,MIL:80.481384,MIN:78.889634,NYM:90.900117,NYY:90.781702,PHI:86.622831,PIT:77.396181,SDP:82.880638,SEA:88.817788,SFG:78.65034,STL:73.120863,TBR:80.027426,TEX:83.706046,TOR:90.913543,WSN:69.721929};
 
