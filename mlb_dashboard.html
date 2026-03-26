@@ -162,8 +162,8 @@ main { padding: 16px 20px; max-width: 1400px; margin: 0 auto; }
   font-family: var(--sans);
 }
 .gc:hover { box-shadow: 0 4px 12px rgba(0,0,0,.1); }
-.gc.val { border-top: 3px solid var(--yellow); }
-.gc.sval { border-top: 3px solid var(--green); }
+.gc.val { }
+.gc.sval { }
 
 /* game time header */
 .gc-time {
@@ -365,18 +365,16 @@ main { padding: 16px 20px; max-width: 1400px; margin: 0 auto; }
   flex: 1;
   text-align: center;
 }
-.gc-expand button:first-child {
+.gc-expand button.btn-math {
   color: var(--text2);
   background: #fff;
   border: 1px solid var(--border2);
 }
-.gc-expand button:first-child:hover { border-color: var(--accent); color: var(--accent); }
-.gc-expand button:not(:first-child) {
-  color: var(--accent);
-  background: #f0f7ff;
-  border: 1px solid #b3d0ee;
+.gc-expand button.btn-math:hover { border-color: var(--accent); color: var(--accent); }
+.gc-expand button.btn-log {
+  border: none;
+  font-weight: 600;
 }
-.gc-expand button:not(:first-child):hover { background: #dceefb; }
 
 /* math drawer */
 .gc-drawer { display: none; border-top: 1px solid var(--border); background: #fafafa; }
@@ -658,7 +656,6 @@ input[type=number] { -moz-appearance:textfield; }
     <button class="btn bg" onclick="goToday()" style="font-size:11px;padding:6px 10px;">Today</button>
     <button class="btn bg" onclick="shiftDate(1)" title="Next day" style="padding:6px 10px;font-size:14px;">›</button>
     <input type="date" id="game-date" style="width:130px;" onchange="fetchMLBGames()"/>
-    <button class="btn bg" onclick="loadDemo()" style="font-size:11px;padding:6px 10px;">NYY @ SFG</button>
     <button class="btn bp" id="fetch-btn" onclick="fetchMLBGames()">↻ Fetch</button>
     <button class="btn bg" onclick="S.games=[];save();rGames();">Clear</button>
     <span class="api-status" id="api-status"></span>
@@ -1746,8 +1743,8 @@ function rGames(){
     const he=(n(r.hwEdge)*100).toFixed(1);
     const best=Math.max(n(r.awEdge),n(r.hwEdge));
     const valCls=best>=0.05?' sval':best>=0.03?' val':'';
-    const acls=n(r.awEdge)>=0.05?'hi':n(r.awEdge)>=0.03?'mid':'lo';
-    const hcls=n(r.hwEdge)>=0.05?'hi':n(r.hwEdge)>=0.03?'mid':'lo';
+    const acls=n(r.awEdge)>0?'hi':'lo';
+    const hcls=n(r.hwEdge)>0?'hi':'lo';
 
     // Team colors and logos
     const awInfo = TEAM_INFO[g.away]||{primary:'#333',secondary:'#666',espn:g.away.toLowerCase()};
@@ -1830,9 +1827,9 @@ function rGames(){
       </div>
 
       <div class="gc-expand">
-        <button onclick="toggleDrawer('${gid}')" id="xbtn-${gid}">▾ Model Math</button>
-        <button onclick="logFromCard('${gid}','${g.away}','${g.home}',${g.awayOdds},${ae},(${n(r.awWP)*100}).toFixed(2),'${r.gameTime||''}',false)">+ Log ${g.away}</button>
-        <button onclick="logFromCard('${gid}','${g.home}','${g.away}',${g.homeOdds},${he},(${n(r.hwWP)*100}).toFixed(2),'${r.gameTime||''}',true)">+ Log ${g.home}</button>
+        <button class="btn-log" style="background:${awInfo.primary}22;color:${awInfo.primary};border:1px solid ${awInfo.primary}44;" onclick="logFromCard('${gid}','${g.away}','${g.home}',${g.awayOdds},${ae},(${n(r.awWP)*100}).toFixed(2),'${r.gameTime||''}',false)">+ Log ${g.away}</button>
+        <button class="btn-math" onclick="toggleDrawer('${gid}')" id="xbtn-${gid}">▾ Model Math</button>
+        <button class="btn-log" style="background:${hwInfo.primary}22;color:${hwInfo.primary};border:1px solid ${hwInfo.primary}44;" onclick="logFromCard('${gid}','${g.home}','${g.away}',${g.homeOdds},${he},(${n(r.hwWP)*100}).toFixed(2),'${r.gameTime||''}',true)">+ Log ${g.home}</button>
       </div>
 
       <div class="gc-drawer" id="dr-${gid}">
@@ -1840,33 +1837,33 @@ function rGames(){
           <div class="math-cols">
             <div>
               <div class="math-col-title">${g.away} Breakdown</div>
-              <div class="math-row"><span class="mk">1. Projected Starters</span><span class="mv">${n(r.aw.projStarters).toFixed(5)}</span></div>
-              <div class="math-row"><span class="mk">2. Wtd Avg WAR/PA</span><span class="mv">${n(r.aw.totalHitterWar).toFixed(5)}</span></div>
-              <div class="math-row"><span class="mk">3. Hitter Change</span><span class="mv" style="color:${n(r.aw.hitterChange)>=0?'var(--green)':'var(--red)'}">${n(r.aw.hitterChange)>=0?'+':''}${n(r.aw.hitterChange).toFixed(5)}</span></div>
-              <div class="math-row" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px;"><span class="mk">4. ${g.away} Rotation</span><span class="mv">${n(r.aw.rotation).toFixed(5)}</span></div>
-              <div class="math-row"><span class="mk">5. Pitcher Value</span><span class="mv">${n(r.aw.pitcherValue).toFixed(5)}</span></div>
-              <div class="math-row"><span class="mk">6. Pitcher Change</span><span class="mv" style="color:${n(r.aw.pitcherChange)>=0?'var(--green)':'var(--red)'}">${n(r.aw.pitcherChange)>=0?'+':''}${n(r.aw.pitcherChange).toFixed(5)}</span></div>
-              <div class="math-row" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px;"><span class="mk">7. Total Change</span><span class="mv" style="color:${n(r.aw.totalChange)>=0?'var(--green)':'var(--red)'}">${n(r.aw.totalChange)>=0?'+':''}${n(r.aw.totalChange).toFixed(5)}</span></div>
-              <div class="math-row"><span class="mk">8. Baseline Wins</span><span class="mv">${n(r.awBase).toFixed(5)}</span></div>
-              <div class="math-row"><span class="mk">9. Added Wins</span><span class="mv">${n(r.aw.wins).toFixed(5)}</span></div>
-              <div class="math-row"><span class="mk">10. Win %</span><span class="mv">${(n(r.aw.winPct)*100).toFixed(5)}%</span></div>
-              <div class="math-row"><span class="mk">11. Game Score</span><span class="mv">${n(r.aw.gameScore).toFixed(5)}</span></div>
-              <div class="math-row hl"><span class="mk">12. Win Probability</span><span class="mv">${(n(r.awWP)*100).toFixed(5)}%</span></div>
+              <div class="math-row"><span class="mk">1. Projected Starters</span><span class="mv">${n(r.aw.projStarters).toFixed(2)}</span></div>
+              <div class="math-row"><span class="mk">2. Wtd Avg WAR/PA</span><span class="mv">${n(r.aw.totalHitterWar).toFixed(2)}</span></div>
+              <div class="math-row"><span class="mk">3. Hitter Change</span><span class="mv" style="color:${n(r.aw.hitterChange)>=0?'var(--green)':'var(--red)'}">${n(r.aw.hitterChange)>=0?'+':''}${n(r.aw.hitterChange).toFixed(2)}</span></div>
+              <div class="math-row" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px;"><span class="mk">4. ${g.away} Rotation</span><span class="mv">${n(r.aw.rotation).toFixed(2)}</span></div>
+              <div class="math-row"><span class="mk">5. Pitcher Value</span><span class="mv">${n(r.aw.pitcherValue).toFixed(2)}</span></div>
+              <div class="math-row"><span class="mk">6. Pitcher Change</span><span class="mv" style="color:${n(r.aw.pitcherChange)>=0?'var(--green)':'var(--red)'}">${n(r.aw.pitcherChange)>=0?'+':''}${n(r.aw.pitcherChange).toFixed(2)}</span></div>
+              <div class="math-row" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px;"><span class="mk">7. Total Change</span><span class="mv" style="color:${n(r.aw.totalChange)>=0?'var(--green)':'var(--red)'}">${n(r.aw.totalChange)>=0?'+':''}${n(r.aw.totalChange).toFixed(2)}</span></div>
+              <div class="math-row"><span class="mk">8. Baseline Wins</span><span class="mv">${n(r.awBase).toFixed(2)}</span></div>
+              <div class="math-row"><span class="mk">9. Added Wins</span><span class="mv">${n(r.aw.wins).toFixed(2)}</span></div>
+              <div class="math-row"><span class="mk">10. Win %</span><span class="mv">${(n(r.aw.winPct)*100).toFixed(2)}%</span></div>
+              <div class="math-row"><span class="mk">11. Game Score</span><span class="mv">${n(r.aw.gameScore).toFixed(2)}</span></div>
+              <div class="math-row hl"><span class="mk">12. Win Probability</span><span class="mv">${(n(r.awWP)*100).toFixed(2)}%</span></div>
             </div>
             <div>
               <div class="math-col-title">${g.home} Breakdown</div>
-              <div class="math-row"><span class="mk">1. Projected Starters</span><span class="mv">${n(r.hw.projStarters).toFixed(5)}</span></div>
-              <div class="math-row"><span class="mk">2. Wtd Avg WAR/PA</span><span class="mv">${n(r.hw.totalHitterWar).toFixed(5)}</span></div>
-              <div class="math-row"><span class="mk">3. Hitter Change</span><span class="mv" style="color:${n(r.hw.hitterChange)>=0?'var(--green)':'var(--red)'}">${n(r.hw.hitterChange)>=0?'+':''}${n(r.hw.hitterChange).toFixed(5)}</span></div>
-              <div class="math-row" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px;"><span class="mk">4. ${g.home} Rotation</span><span class="mv">${n(r.hw.rotation).toFixed(5)}</span></div>
-              <div class="math-row"><span class="mk">5. Pitcher Value</span><span class="mv">${n(r.hw.pitcherValue).toFixed(5)}</span></div>
-              <div class="math-row"><span class="mk">6. Pitcher Change</span><span class="mv" style="color:${n(r.hw.pitcherChange)>=0?'var(--green)':'var(--red)'}">${n(r.hw.pitcherChange)>=0?'+':''}${n(r.hw.pitcherChange).toFixed(5)}</span></div>
-              <div class="math-row" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px;"><span class="mk">7. Total Change</span><span class="mv" style="color:${n(r.hw.totalChange)>=0?'var(--green)':'var(--red)'}">${n(r.hw.totalChange)>=0?'+':''}${n(r.hw.totalChange).toFixed(5)}</span></div>
-              <div class="math-row"><span class="mk">8. Baseline Wins</span><span class="mv">${n(r.hwBase).toFixed(5)}</span></div>
-              <div class="math-row"><span class="mk">9. Added Wins</span><span class="mv">${n(r.hw.wins).toFixed(5)}</span></div>
-              <div class="math-row"><span class="mk">10. Win % <span style="font-size:9px;color:var(--accent);">×1.07 HFA</span></span><span class="mv">${(n(r.hw.winPct)*100).toFixed(5)}%</span></div>
-              <div class="math-row"><span class="mk">11. Game Score</span><span class="mv">${n(r.hw.gameScore).toFixed(5)}</span></div>
-              <div class="math-row hl"><span class="mk">12. Win Probability</span><span class="mv">${(n(r.hwWP)*100).toFixed(5)}%</span></div>
+              <div class="math-row"><span class="mk">1. Projected Starters</span><span class="mv">${n(r.hw.projStarters).toFixed(2)}</span></div>
+              <div class="math-row"><span class="mk">2. Wtd Avg WAR/PA</span><span class="mv">${n(r.hw.totalHitterWar).toFixed(2)}</span></div>
+              <div class="math-row"><span class="mk">3. Hitter Change</span><span class="mv" style="color:${n(r.hw.hitterChange)>=0?'var(--green)':'var(--red)'}">${n(r.hw.hitterChange)>=0?'+':''}${n(r.hw.hitterChange).toFixed(2)}</span></div>
+              <div class="math-row" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px;"><span class="mk">4. ${g.home} Rotation</span><span class="mv">${n(r.hw.rotation).toFixed(2)}</span></div>
+              <div class="math-row"><span class="mk">5. Pitcher Value</span><span class="mv">${n(r.hw.pitcherValue).toFixed(2)}</span></div>
+              <div class="math-row"><span class="mk">6. Pitcher Change</span><span class="mv" style="color:${n(r.hw.pitcherChange)>=0?'var(--green)':'var(--red)'}">${n(r.hw.pitcherChange)>=0?'+':''}${n(r.hw.pitcherChange).toFixed(2)}</span></div>
+              <div class="math-row" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px;"><span class="mk">7. Total Change</span><span class="mv" style="color:${n(r.hw.totalChange)>=0?'var(--green)':'var(--red)'}">${n(r.hw.totalChange)>=0?'+':''}${n(r.hw.totalChange).toFixed(2)}</span></div>
+              <div class="math-row"><span class="mk">8. Baseline Wins</span><span class="mv">${n(r.hwBase).toFixed(2)}</span></div>
+              <div class="math-row"><span class="mk">9. Added Wins</span><span class="mv">${n(r.hw.wins).toFixed(2)}</span></div>
+              <div class="math-row"><span class="mk">10. Win % <span style="font-size:9px;color:var(--accent);">×1.07 HFA</span></span><span class="mv">${(n(r.hw.winPct)*100).toFixed(2)}%</span></div>
+              <div class="math-row"><span class="mk">11. Game Score</span><span class="mv">${n(r.hw.gameScore).toFixed(2)}</span></div>
+              <div class="math-row hl"><span class="mk">12. Win Probability</span><span class="mv">${(n(r.hwWP)*100).toFixed(2)}%</span></div>
             </div>
           </div>
           <div class="wp-result">
