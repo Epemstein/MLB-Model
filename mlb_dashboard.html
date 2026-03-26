@@ -2821,7 +2821,7 @@ async function fetchProjections(force=false){
       .filter(p => (parseFloat(p.PA)||0) >= 10)
       .map(p => [p.PlayerName||p.Name||'', ft(p.Team||''), Math.round(p.G||0), Math.round(p.PA||0), parseFloat(p.WAR)||0]);
     const slimPit = pitData
-      .filter(p => (parseFloat(p.IP)||0) > 0)
+      .filter(p => (parseFloat(p.IP)||0) >= 5)
       .map(p => [p.PlayerName||p.Name||'', ft(p.Team||''), Math.round(p.G||0), Math.round(p.GS||0), parseFloat(p.IP)||0, parseFloat(p.WAR)||0]);
     const payload = { bat: slimBat, pit: slimPit, slim: true };
     localStorage.setItem(PROJ_LS_KEY, JSON.stringify(payload));
@@ -2849,7 +2849,7 @@ function applyProjections(payload){
   if(payload.slim){
     // Slim format: arrays of [name, team, g, pa, war] / [name, team, g, gs, ip, war]
     newHitters  = bat.map(r => ({name:r[0], team:r[1], g:r[2], pa:r[3], war:r[4]})).filter(p => p.name && p.pa >= 10);
-    newPitchers = pit.map(r => ({name:r[0], team:r[1], g:r[2], gs:r[3], ip:r[4], war:r[5]})).filter(p => p.name && p.ip > 0);
+    newPitchers = pit.map(r => ({name:r[0], team:r[1], g:r[2], gs:r[3], ip:r[4], war:r[5]})).filter(p => p.name && p.ip >= 5);
   } else {
     // Full FG object format (direct from API before slimming)
     newHitters = bat
@@ -2857,7 +2857,7 @@ function applyProjections(payload){
       .map(p => ({name: p.PlayerName||p.Name||'', team: fgTeam(p.Team||p.team||''), g: Math.round(p.G||0), pa: Math.round(p.PA||0), war: parseFloat(p.WAR)||0}))
       .filter(p => p.name);
     newPitchers = pit
-      .filter(p => p.WAR != null && (parseFloat(p.IP)||0) > 0)
+      .filter(p => p.WAR != null && (parseFloat(p.IP)||0) >= 5)
       .map(p => ({name: p.PlayerName||p.Name||'', team: fgTeam(p.Team||p.team||''), g: Math.round(p.G||0), gs: Math.round(p.GS||0), ip: parseFloat(p.IP)||0, war: parseFloat(p.WAR)||0}))
       .filter(p => p.name);
   }
