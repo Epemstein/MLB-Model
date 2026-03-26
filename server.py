@@ -10,14 +10,15 @@ PORT = int(os.environ.get('PORT', 8080))
 IS_CLOUD = os.environ.get('RENDER', '') != ''  # Render sets this env var
 
 PROXY_RULES = {
-    '/fg/':      'https://www.fangraphs.com/api/scores/',
-    '/mlb-api/': 'https://statsapi.mlb.com/api/v1/',
+    '/fg/':       'https://www.fangraphs.com/api/scores/',
+    '/fg-proj/':  'https://www.fangraphs.com/api/projections',
+    '/mlb-api/':  'https://statsapi.mlb.com/api/v1/',
 }
 
 FG_HEADERS = {
     'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept':          'application/json, text/plain, */*',
-    'Referer':         'https://www.fangraphs.com/scores',
+    'Referer':         'https://www.fangraphs.com/projections',
     'Origin':          'https://www.fangraphs.com',
     'Accept-Language': 'en-US,en;q=0.9',
     'Cookie':          'wordpress_logged_in_0cae6f5cb929d209043cb97f8c2eee44=Epemstein%7C1804794039%7CVbo4EUNM0l4lEQ01rf6OjCjddQIldJExT4vDBBVIe9u%7C8ad64507ab61ff6e0297bbb71ea01690d90cfbe1e54b846e8dad03661d4eb64f',
@@ -48,7 +49,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         for prefix, upstream_base in PROXY_RULES.items():
             if self.path.startswith(prefix):
                 tail = self.path[len(prefix):]
-                upstream = upstream_base + tail
+                # For fg-proj, the base is the full endpoint; tail is just the query string
+                if prefix == '/fg-proj/':
+                    upstream = upstream_base + ('?' + tail.split('?',1)[1] if '?' in tail else '')
+                else:
+                    upstream = upstream_base + tail
                 hdrs = FG_HEADERS if 'fangraphs' in upstream_base else MLB_HEADERS
                 self._proxy(upstream, hdrs)
                 return
