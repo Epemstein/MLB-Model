@@ -673,6 +673,7 @@ input[type=number] { -moz-appearance:textfield; }
   <button onclick="showPanel('br',this)">💰 Bankroll</button>
   <button onclick="showPanel('teams',this)">🏟 Teams</button>
   <button onclick="showPanel('standings',this)">🏆 Standings</button>
+  <button onclick="showPanel('activity',this)">📜 Activity</button>
   <button onclick="showPanel('tools',this)">🔧 Tools</button>
 </nav>
 
@@ -876,6 +877,22 @@ input[type=number] { -moz-appearance:textfield; }
   </div>
   <div id="standings-body" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;"></div>
 </div>
+
+<!-- ══ ACTIVITY LOG ══ -->
+<div id="panel-activity" class="panel">
+  <div class="card">
+    <div class="ct">Activity Log <span id="activity-count" style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);"></span></div>
+    <div class="sw"><table class="dt" style="font-size:11px;">
+      <thead><tr>
+        <th style="width:130px">Time</th>
+        <th style="width:80px">User</th>
+        <th>Action</th>
+      </tr></thead>
+      <tbody id="activity-body"><tr><td colspan="3" class="nd">No activity yet.</td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+
 <div id="panel-tools" class="panel">
   <div class="g2">
     <div class="card">
@@ -1624,6 +1641,7 @@ function buildSpOverrides(){
 }
 
 function setSP(gameId, field, val){
+  if(_currentUser && field==='awName' || field==='hwName') logActivity(`Changed SP: ${val} (${gameId})`);
   if(!S.spOverrides[gameId]) S.spOverrides[gameId]={};
   S.spOverrides[gameId][field]=val;
   save();
@@ -2008,6 +2026,7 @@ function addPick(){
   const newPick={id:Date.now(),dt,gt,tx,opp,ha,od,ed:edFinal,xwp,un,ku,rs,uw,kuw,tp};
   S.picks.push(newPick);
   savePickToFirebase(newPick);
+  logActivity(`Logged pick: ${newPick.tx} ${newPick.od>0?'+':''}${newPick.od} (${newPick.rs})`);
   localStorage.setItem('mlb26v3',JSON.stringify(S));
   rPicks();rPerf();
   ['p-tx','p-opp','p-od','p-xwp','p-ed','p-gt'].forEach(id=>document.getElementById(id).value='');
@@ -2030,7 +2049,7 @@ function setPickView(view, btn){
   rPicks();
 }
 
-function delPick(id){S.picks=S.picks.filter(p=>p.id!==id);deletePickFromFirebase(id);localStorage.setItem('mlb26v3',JSON.stringify(S));rPicks();rPerf();}
+function delPick(id){const dp=S.picks.find(p=>p.id===id);if(dp)logActivity(`Deleted pick: ${dp.tx} ${dp.od>0?'+':''}${dp.od}`);S.picks=S.picks.filter(p=>p.id!==id);deletePickFromFirebase(id);localStorage.setItem('mlb26v3',JSON.stringify(S));rPicks();rPerf();}
 function updPick(id,rs){
   const p=S.picks.find(p=>p.id===id);if(!p)return;
   p.rs=rs;p.uw=rs==='Win'?p.un*(aToDec(p.od)-1):rs==='Loss'?-p.un:0;
@@ -2549,6 +2568,7 @@ function getPitcherWar162(p){
 }
 
 function setIpOverride(name, team, val){
+  if(_currentUser){ const isRevert2 = isNaN(parseFloat(val))||parseFloat(val)<=0; logActivity(isRevert2 ? `Reverted IP/Start: ${name} (${team})` : `Set IP/Start: ${name} (${team}) → ${val}`); }
   const key = name + '|' + team;
   const n = parseFloat(val);
   const isRevert = isNaN(n) || n <= 0;
@@ -2685,6 +2705,7 @@ function showPanel(name,btn){
   if(name==='proj-p')rProjP();
   if(name==='br')rBRChart();
   if(name==='standings'){fetchStandings();}
+  if(name==='activity'){loadActivityLog();}
 }
 function toast(msg,type){const el=document.getElementById('toast');el.textContent=msg;el.className='toast'+(type==='err'?' err':'')+' show';setTimeout(()=>el.classList.remove('show'),2500);}
 
@@ -3325,6 +3346,7 @@ function saveEditPick(){
   p.uw  = p.rs==='Win' ? p.un*(aToDec(p.od)-1) : p.rs==='Loss' ? -p.un : 0;
   p.kuw = p.rs==='Win' ? p.ku*(aToDec(p.od)-1) : p.rs==='Loss' ? -p.ku : 0;
   savePickToFirebase(p);
+  logActivity(`Edited pick: ${p.tx} ${p.od>0?'+':''}${p.od} → ${p.rs}`);
   localStorage.setItem('mlb26v3',JSON.stringify(S));
   closeEditPick();
   rPicks();
@@ -3450,7 +3472,16 @@ function setupRealtimeListeners(){
   // ── Games: real-time listener for today ──
   const today = new Date().toISOString().slice(0,10);
   db.collection('games').doc(today).onSnapshot(snap => {
-    if(snap.exists){ S.games = snap.data().games || []; rGames(); }
+    if(snap.exists){
+      const dbGames = snap.data().games || [];
+      const local = JSON.parse(localStorage.getItem('mlb26v3')||'{}');
+      const localGames = local.games || [];
+      S.games = dbGames.map(g => {
+        const lg = localGames.find(l => String(l.id) === String(g.id));
+        return lg ? {...g, myAwOdds: lg.myAwOdds, myHwOdds: lg.myHwOdds} : g;
+      });
+      rGames();
+    }
   }, e => console.error('Games listener error:', e));
 
   // ── Overrides: real-time listener ──
@@ -3477,7 +3508,16 @@ async function loadFromFirebase(){
       db.collection('overrides').doc('current').get(),
       db.collection('bankroll').doc('settings').get(),
     ]);
-    if(gamesSnap.exists) S.games = gamesSnap.data().games || [];
+    if(gamesSnap.exists){
+      const dbGames = gamesSnap.data().games || [];
+      // Restore any local myOdds the user had set
+      const local = JSON.parse(localStorage.getItem('mlb26v3')||'{}');
+      const localGames = local.games || [];
+      S.games = dbGames.map(g => {
+        const lg = localGames.find(l => String(l.id) === String(g.id));
+        return lg ? {...g, myAwOdds: lg.myAwOdds, myHwOdds: lg.myHwOdds} : g;
+      });
+    }
     if(ovSnap.exists){
       const ov = ovSnap.data();
       if(ov.spOverrides) S.spOverrides = ov.spOverrides;
@@ -3505,7 +3545,12 @@ async function saveToFirebase(){
   try {
     const today = new Date().toISOString().slice(0,10);
     // Save games
-    await db.collection('games').doc(today).set({ games: S.games, updated: firebase.firestore.FieldValue.serverTimestamp() });
+    // Strip per-user myOdds before saving — each user keeps their own locally
+    const gamesForDB = S.games.map(g => {
+      const {myAwOdds, myHwOdds, ...rest} = g;
+      return rest;
+    });
+    await db.collection('games').doc(today).set({ games: gamesForDB, updated: firebase.firestore.FieldValue.serverTimestamp() });
     // Save overrides
     await db.collection('overrides').doc('current').set({ spOverrides: S.spOverrides, ipOverrides: S.ipOverrides, updated: firebase.firestore.FieldValue.serverTimestamp() });
     // Save bankroll
@@ -3525,6 +3570,56 @@ async function savePickToFirebase(pick){
 async function deletePickFromFirebase(id){
   if(!_currentUser) return;
   try { await db.collection('picks').doc(String(id)).delete(); } catch(e){}
+}
+
+// ═══════════════════════════════════════════════
+// ACTIVITY LOG
+// ═══════════════════════════════════════════════
+function logActivity(action){
+  if(!_currentUser) return;
+  const entry = {
+    uid:    _currentUser.uid,
+    name:   _currentUser.displayName || _currentUser.email,
+    photo:  _currentUser.photoURL || '',
+    action,
+    ts:     firebase.firestore.FieldValue.serverTimestamp(),
+    tsMs:   Date.now()
+  };
+  db.collection('activity').add(entry).catch(e => console.error('Activity log error:', e));
+}
+
+function renderActivityLog(docs){
+  const body = document.getElementById('activity-body');
+  const count = document.getElementById('activity-count');
+  if(!body) return;
+  if(!docs.length){
+    body.innerHTML = '<tr><td colspan="3" class="nd">No activity yet.</td></tr>';
+    if(count) count.textContent = '';
+    return;
+  }
+  if(count) count.textContent = docs.length + ' events';
+  body.innerHTML = docs.map(d => {
+    const ts = d.ts?.toDate ? d.ts.toDate().toLocaleString('en-US',{month:'2-digit',day:'2-digit',hour:'numeric',minute:'2-digit'}) : '—';
+    return `<tr>
+      <td style="color:var(--muted);font-size:10px;white-space:nowrap">${ts}</td>
+      <td style="white-space:nowrap">
+        <img src="${d.photo||''}" width="16" height="16" style="border-radius:50%;vertical-align:middle;margin-right:4px;" onerror="this.style.display='none'" />
+        ${(d.name||'?').split(' ')[0]}
+      </td>
+      <td>${d.action||''}</td>
+    </tr>`;
+  }).join('');
+}
+
+let _activityUnsub = null;
+function loadActivityLog(){
+  if(_activityUnsub) return; // already listening
+  _activityUnsub = db.collection('activity')
+    .orderBy('tsMs', 'desc')
+    .limit(100)
+    .onSnapshot(snap => {
+      renderActivityLog(snap.docs.map(d => d.data()));
+    }, e => console.error('Activity listener error:', e));
 }
 </script>
 
