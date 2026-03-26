@@ -2684,7 +2684,15 @@ function renderTeam(abr){
   document.getElementById('tm-logo-bg').src = teamLogo(abr);
 
   // Stat pills — white on colored banner
-  const hWAR = getTeamHitterWAR162(abr);
+  // Wtd avg WAR/162 × 9 — same formula as model step 2
+  const _h = PROJ_HITTERS.filter(p => p.team === abr);
+  const _totalPA = _h.reduce((s,p)=>s+(p.pa||0), 0);
+  const hWAR = _totalPA > 0
+    ? _h.reduce((s,p)=>{
+        const war162 = p.g > 0 ? (p.pa/p.g)*(p.pa>0?p.war/p.pa:0)*162 : 0;
+        return s + war162*((p.pa||0)/_totalPA);
+      }, 0) * 9
+    : 0;
   const rotWAR = d.rotation_total || 0;
   const totalWAR = hWAR + rotWAR;
   const gr = liveGP > 0 ? (162 - liveGP) : d.games_remaining;
