@@ -656,6 +656,11 @@ input[type=number] { -moz-appearance:textfield; }
   <div style="display:flex;gap:10px;align-items:center;">
     <div class="hpill">DATE: <strong id="hdr-date">—</strong></div>
     <div class="hpill">LAST FETCH: <strong id="hdr-fetch">—</strong></div>
+    <div class="hpill" id="hdr-user" style="display:none;gap:6px;align-items:center;">
+      <img id="hdr-photo" src="" width="18" height="18" style="border-radius:50%;object-fit:cover;" onerror="this.style.display='none'" />
+      <span>Logged in as <strong id="hdr-name">—</strong></span>
+      <span style="color:var(--muted);cursor:pointer;margin-left:4px;" onclick="signOut()" title="Sign out">↩</span>
+    </div>
   </div>
 </header>
 
@@ -3372,6 +3377,13 @@ auth.onAuthStateChanged(user => {
     _currentUser = user;
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('presence-bar').style.display = '';
+    // Update header
+    const hdrUser = document.getElementById('hdr-user');
+    if(hdrUser){
+      hdrUser.style.display = 'flex';
+      document.getElementById('hdr-name').textContent = user.displayName?.split(' ')[0] || user.email;
+      document.getElementById('hdr-photo').src = user.photoURL || '';
+    }
     // Save/update user profile
     db.collection('users').doc(user.uid).set({
       name: user.displayName,
@@ -3385,6 +3397,8 @@ auth.onAuthStateChanged(user => {
     _currentUser = null;
     document.getElementById('login-screen').style.display = 'flex';
     document.getElementById('presence-bar').style.display = 'none';
+    const hdrUser2 = document.getElementById('hdr-user');
+    if(hdrUser2) hdrUser2.style.display = 'none';
   }
 });
 
