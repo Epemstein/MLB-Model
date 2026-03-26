@@ -838,15 +838,9 @@ input[type=number] { -moz-appearance:textfield; }
 
 <!-- ══ STANDINGS ══ -->
 <div id="panel-standings" class="panel">
-  <div class="api-bar" style="margin-bottom:12px;justify-content:space-between;">
-    <div style="display:flex;gap:8px;align-items:center;">
-      <button class="btn bg" onclick="fetchStandings()" id="standings-refresh-btn" style="font-size:11px;padding:6px 10px;">↻ Refresh</button>
-      <span id="standings-status" style="font-size:11px;color:var(--muted);"></span>
-    </div>
-    <div style="display:flex;gap:6px;">
-      <button class="fb active" id="stn-al" onclick="showLeague('AL',this)" style="font-size:11px;">AL</button>
-      <button class="fb" id="stn-nl" onclick="showLeague('NL',this)" style="font-size:11px;">NL</button>
-    </div>
+  <div class="api-bar" style="margin-bottom:12px;">
+    <button class="btn bg" onclick="fetchStandings()" id="standings-refresh-btn" style="font-size:11px;padding:6px 10px;">↻ Refresh</button>
+    <span id="standings-status" style="font-size:11px;color:var(--muted);margin-left:8px;"></span>
   </div>
   <div id="standings-body" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;"></div>
 </div>
@@ -917,7 +911,7 @@ input[type=number] { -moz-appearance:textfield; }
     <!-- HITTERS -->
     <div class="card">
       <div class="ct">Position Players — Full Depth</div>
-      <div id="tm-hitters" class="sw"></div>
+      <div id="tm-hitters" class="sw" style="max-height:none;"></div>
     </div>
 
   </div>
@@ -2702,11 +2696,11 @@ function renderTeam(abr){
   const subStyle = 'font-size:9px;color:rgba(255,255,255,.5);margin-top:2px;';
 
   document.getElementById('tm-stats-row').innerHTML = `
-    <div style="${pillStyle}"><div style="${lblStyle}">Proj Wins</div><div style="${valStyle}">${projW}</div><div style="${subStyle}">2026</div></div>
-    <div style="${pillStyle}"><div style="${lblStyle}">Hitter WAR/162</div><div style="${valStyle}">${hWAR.toFixed(2)}</div><div style="${subStyle}">wtd avg</div></div>
-    <div style="${pillStyle}"><div style="${lblStyle}">Rotation WAR</div><div style="${valStyle}">${rotWAR.toFixed(1)}</div><div style="${subStyle}">top 5</div></div>
-    <div style="${pillStyle}"><div style="${lblStyle}">Total WAR</div><div style="${valStyle}">${totalWAR.toFixed(1)}</div><div style="${subStyle}">h + rot</div></div>
-    ${gr ? `<div style="${pillStyle}"><div style="${lblStyle}">Gm Rem</div><div style="${valStyle}">${gr}</div><div style="${subStyle}">of 162</div></div>` : ''}
+    <div style="${pillStyle}"><div style="${lblStyle}">Proj Wins</div><div style="${valStyle}">${getProjWins(abr).toFixed(2)}</div></div>
+    <div style="${pillStyle}"><div style="${lblStyle}">Hitter Baseline</div><div style="${valStyle}">${hWAR.toFixed(2)}</div></div>
+    <div style="${pillStyle}"><div style="${lblStyle}">Rotation Baseline</div><div style="${valStyle}">${rotWAR.toFixed(1)}</div></div>
+    <div style="${pillStyle}"><div style="${lblStyle}">Total WAR</div><div style="${valStyle}">${totalWAR.toFixed(1)}</div></div>
+    ${gr ? `<div style="${pillStyle}"><div style="${lblStyle}">Gm Rem</div><div style="${valStyle}">${gr}</div></div>` : ''}
   `;
 
   // Look up players from PROJ_HITTERS / PROJ_PITCHERS (same source as projection tabs)
@@ -3027,6 +3021,9 @@ function applyProjections(payload){
 }
 
 // On load: use cache if fresh, auto-fetch if stale or missing
+// Auto-fetch standings on load
+document.addEventListener('DOMContentLoaded', () => fetchStandings());
+
 (function initProjections(){
   const cached = localStorage.getItem(PROJ_LS_KEY);
   const ts     = parseInt(localStorage.getItem(PROJ_LS_TS)||'0');
@@ -3090,9 +3087,7 @@ function renderStandings(){
 
   // Division id→name map
   const DIV_NAMES = {200:'AL West',201:'AL East',202:'AL Central',203:'NL West',204:'NL East',205:'NL Central'};
-  const AL_DIVS = [201,202,200];
-  const NL_DIVS = [204,205,203];
-  const divIds = _standingsLeague === 'AL' ? AL_DIVS : NL_DIVS;
+  const divIds = [201,202,200,204,205,203];
 
   body.innerHTML = divIds.map(divId => {
     const rec = _standingsData.find(r => r.division?.id === divId);
