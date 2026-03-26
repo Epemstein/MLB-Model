@@ -1611,6 +1611,8 @@ function modelCalc(g){
   const awTD=TEAM_DATA[aw]||{}, hwTD=TEAM_DATA[hw]||{};
 
   function stageCalc(team, td, spWar162, projWins, overrides, isHome){
+    const teamName = team === 'aw' ? g.away : g.home;
+
     // 1. Projected Starters = sum of top-9 hitters' s600 WAR × 1.08
     let lineup = (td.hitters||[])
       .filter(p=>p.s600 && p.war>0)
@@ -1636,7 +1638,6 @@ function modelCalc(g){
     // 5. Hitter Change = Projected Starters - Weighted Avg WAR/162 × 9
     //    WAR/162 = (pa/g) * (war/pa) * 162
     //    Weighted by each hitter's PA share, then × 9 for lineup
-    const teamName = team === 'aw' ? g.away : g.home;
     const liveHitters = PROJ_HITTERS.filter(p => p.team === teamName);
     const totalTeamPA = liveHitters.reduce((s,p)=>s+(p.pa||0), 0);
     const totalHitterWar = totalTeamPA > 0
