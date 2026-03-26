@@ -622,6 +622,32 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:
 input[type=number] { -moz-appearance:textfield; }
 #odds-summary-table td, #odds-summary-table th { padding:3px 5px; }
 .odds-team-cell:hover { filter: brightness(0.92); transition: filter .1s; }
+
+/* Activity notification toast */
+#activity-toast {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 99998;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.15);
+  font-size: 12px;
+  max-width: 280px;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity .3s ease, transform .3s ease;
+  pointer-events: none;
+}
+#activity-toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+#activity-toast .at-user { font-weight: 700; color: var(--accent); }
+#activity-toast .at-action { color: var(--text2); margin-top: 2px; }
+
 </style>
 
 <!-- Firebase -->
@@ -2052,9 +2078,13 @@ function setPickView(view, btn){
 function delPick(id){const dp=S.picks.find(p=>p.id===id);if(dp)logActivity(`Deleted pick: ${dp.tx} ${dp.od>0?'+':''}${dp.od}`);S.picks=S.picks.filter(p=>p.id!==id);deletePickFromFirebase(id);localStorage.setItem('mlb26v3',JSON.stringify(S));rPicks();rPerf();}
 function updPick(id,rs){
   const p=S.picks.find(p=>p.id===id);if(!p)return;
+  const oldRs = p.rs;
   p.rs=rs;p.uw=rs==='Win'?p.un*(aToDec(p.od)-1):rs==='Loss'?-p.un:0;
   p.kuw=rs==='Win'?(p.ku||0)*(aToDec(p.od)-1):rs==='Loss'?-(p.ku||0):0;
-  save();rPicks();rPerf();
+  savePickToFirebase(p);
+  logActivity(`Marked pick ${p.tx} as ${rs} (was ${oldRs})`);
+  localStorage.setItem('mlb26v3',JSON.stringify(S));
+  rPicks();rPerf();
 }
 function rPicks(){
   const b=document.getElementById('pb');
@@ -2367,6 +2397,12 @@ function doSwap(playerName, s600, war){
     g.lineupOverrides[key] = {name: playerName, s600, war, manual: true, original: orig, origS600, origWar};
   }
   save();
+  // Log the swap
+  const g2 = S.games.find(g=>String(g.id)===String(swapCtx.gid));
+  const swapKey = `${swapCtx.side}_${swapCtx.slotIdx}`;
+  const prevOv = g2?.lineupOverrides?.[swapKey];
+  const outName = prevOv?.original || prevOv?.name || 'unknown';
+  logActivity(`Edited ${swapCtx.team} lineup: swapped in ${playerName} for ${outName}`);
   closeSwapModal();
   rGames();
   toast(`Swapped in ${playerName}`);
@@ -3575,11 +3611,25 @@ async function deletePickFromFirebase(id){
 // ═══════════════════════════════════════════════
 // ACTIVITY LOG
 // ═══════════════════════════════════════════════
+let _activityToastTimer = null;
+function showActivityToast(name, action){
+  const el = document.getElementById('activity-toast');
+  const uEl = document.getElementById('at-user');
+  const aEl = document.getElementById('at-action');
+  if(!el) return;
+  uEl.textContent = (name||'?').split(' ')[0];
+  aEl.textContent = action;
+  el.classList.add('show');
+  clearTimeout(_activityToastTimer);
+  _activityToastTimer = setTimeout(() => el.classList.remove('show'), 4000);
+}
+
 function logActivity(action){
   if(!_currentUser) return;
+  const name = _currentUser.displayName || _currentUser.email;
   const entry = {
     uid:    _currentUser.uid,
-    name:   _currentUser.displayName || _currentUser.email,
+    name,
     photo:  _currentUser.photoURL || '',
     action,
     ts:     firebase.firestore.FieldValue.serverTimestamp(),
@@ -3614,11 +3664,23 @@ function renderActivityLog(docs){
 let _activityUnsub = null;
 function loadActivityLog(){
   if(_activityUnsub) return; // already listening
+  let _lastActivityTs = Date.now();
   _activityUnsub = db.collection('activity')
     .orderBy('tsMs', 'desc')
     .limit(100)
     .onSnapshot(snap => {
-      renderActivityLog(snap.docs.map(d => d.data()));
+      const docs = snap.docs.map(d => d.data());
+      renderActivityLog(docs);
+      // Show toast for new events from OTHER users
+      snap.docChanges().forEach(change => {
+        if(change.type === 'added'){
+          const d = change.doc.data();
+          if(d.uid !== _currentUser?.uid && d.tsMs > _lastActivityTs){
+            showActivityToast(d.name, d.action);
+          }
+        }
+      });
+      _lastActivityTs = Date.now();
     }, e => console.error('Activity listener error:', e));
 }
 </script>
@@ -3661,5 +3723,6 @@ function loadActivityLog(){
   </div>
 </div>
 
+<div id="activity-toast"><div class="at-user" id="at-user"></div><div class="at-action" id="at-action"></div></div>
 </body>
 </html>
