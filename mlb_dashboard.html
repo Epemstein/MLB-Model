@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>v2 MLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -2392,8 +2392,13 @@ function doSwap(playerName, s600, war){
   const key = `${swapCtx.side}_${swapCtx.slotIdx}`;
   const existing = g.lineupOverrides[key];
 
-  // Get the original player for this slot (before any manual swap)
-  const originalName = existing?.original || existing?.name || null;
+  // Capture who is currently in this slot BEFORE writing the new override
+  const r = modelCalc(g);
+  const lu = swapCtx.side==='aw' ? r.awLu : r.hwLu;
+  const currentPlayer = lu?.[swapCtx.slotIdx];
+  const outName = (currentPlayer?.name && currentPlayer.name !== '—' && currentPlayer.name !== 'TBD' && currentPlayer.name !== '?')
+    ? currentPlayer.name
+    : (existing?.original || existing?.name || 'TBD');
 
   if(existing?.manual && normName(existing.original||'') === normName(playerName)){
     // Swapping back to the original — delete the manual override entirely
@@ -2406,11 +2411,6 @@ function doSwap(playerName, s600, war){
     g.lineupOverrides[key] = {name: playerName, s600, war, manual: true, original: orig, origS600, origWar};
   }
   save();
-  // Log the swap
-  const g2 = S.games.find(g=>String(g.id)===String(swapCtx.gid));
-  const swapKey = `${swapCtx.side}_${swapCtx.slotIdx}`;
-  const prevOv = g2?.lineupOverrides?.[swapKey];
-  const outName = prevOv?.original || prevOv?.name || 'unknown';
   logActivity(`Edited ${swapCtx.team} lineup: swapped in ${playerName} for ${outName}`, swapCtx.team);
   closeSwapModal();
   rGames();
