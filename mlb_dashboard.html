@@ -1002,6 +1002,15 @@ function calcAllProjWins(){
 // Team hitter weighted WAR/162
 // Weighted average of each hitter's WAR/162, weighted by PA%
 // ─────────────────────────────────────────────────────────────
+
+function getTeamRotationBaseline(team){
+  return PROJ_PITCHERS
+    .filter(p => p.team === team && p.gs > 0)
+    .sort((a,b) => b.gs - a.gs)
+    .slice(0, 5)
+    .reduce((s,p) => s + getPitcherWar162(p), 0);
+}
+
 function getTeamHitterWAR162(team, overrides){
   let hitters = PROJ_HITTERS.filter(p => p.team === team);
   const totalPA = hitters.reduce((s,p) => s + (p.pa||0), 0);
@@ -1615,8 +1624,8 @@ function modelCalc(g){
     }
     const projStarters = lineup.reduce((s,p)=>s+(p.s600||0), 0) * 1.08;
 
-    // 2. Rotation = rotation_total from team sheet
-    const rotation = td.rotation_total || ROT_WAR[team] || 10.5;
+    // 2. Rotation Baseline = sum of WAR/162 for top 5 starters by GS
+    const rotation = getTeamRotationBaseline(teamName);
 
     // 3. Pitcher Value = sp_war162 * 5
     const pitcherValue = (spWar162||0) * 5;
@@ -2687,7 +2696,7 @@ function renderTeam(abr){
         return s + war162*((p.pa||0)/_totalPA);
       }, 0) * 9
     : 0;
-  const rotWAR = d.rotation_total || 0;
+  const rotWAR = getTeamRotationBaseline(abr);
   const totalWAR = hWAR + rotWAR;
   const gr = liveGP > 0 ? (162 - liveGP) : d.games_remaining;
   const pillStyle = 'background:rgba(0,0,0,.25);border-radius:4px;padding:8px 12px;min-width:90px;text-align:center;';
