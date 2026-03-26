@@ -906,7 +906,7 @@ input[type=number] { -moz-appearance:textfield; }
       <div class="ct">Rotation — Top 5 Starters</div>
       <div id="tm-rotation" class="sw" style="max-height:none;"></div>
       <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
-        <div style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.1em;margin-bottom:8px;text-transform:uppercase;">Full Pitching Staff</div>
+        <div class="ct" style="margin-bottom:8px;">Bullpen</div>
         <div id="tm-bullpen" class="sw"></div>
       </div>
     </div>
@@ -2638,7 +2638,7 @@ function renderTeam(abr){
 
   const rotRows = rotation.map((p,i) => `<tr>
     <td style="color:var(--muted)">${i+1}</td>
-    <td>${p.name}</td>
+    <td style="white-space:nowrap">${p.mlbamid ? `<img src="https://img.mlbstatic.com/mlb-photos/image/upload/w_60,q_80/v1/people/${p.mlbamid}/headshot/67/current" width="24" height="24" style="border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />` : ''}${p.name}</td>
     <td style="text-align:right;font-family:var(--mono)">${p.g}</td>
     <td style="text-align:right;font-family:var(--mono)">${p.gs}</td>
     <td style="text-align:right;font-family:var(--mono)">${p.ip}</td>
@@ -2652,18 +2652,25 @@ function renderTeam(abr){
       <tbody>${rotRows || '<tr><td colspan="7" class="nd">No data</td></tr>'}</tbody>
     </table>`;
 
-  // Bullpen: GS = 0
-  const bullpen = teamPitchers.filter(p => p.gs === 0).sort((a,b) => b.war - a.war);
-  const bpRows = bullpen.map(p => `<tr>
-    <td>${p.name}</td>
-    <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${p.g}</td>
+  // Bullpen: GS = 0, sorted by WAR desc
+  const bullpen = teamPitchers
+    .filter(p => p.gs === 0)
+    .map(p => ({...p, war162: getPitcherWar162(p)}))
+    .sort((a,b) => b.war - a.war);
+  const bpRows = bullpen.map((p,i) => `<tr>
+    <td style="color:var(--muted)">${i+1}</td>
+    <td style="white-space:nowrap">${p.mlbamid ? `<img src="https://img.mlbstatic.com/mlb-photos/image/upload/w_60,q_80/v1/people/${p.mlbamid}/headshot/67/current" width="24" height="24" style="border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />` : ''}${p.name}</td>
+    <td style="text-align:right;font-family:var(--mono)">${p.g}</td>
+    <td style="text-align:right;font-family:var(--mono)">${p.gs}</td>
+    <td style="text-align:right;font-family:var(--mono)">${p.ip}</td>
     <td style="text-align:right;font-family:var(--mono);font-weight:600">${p.war.toFixed(2)}</td>
+    <td style="text-align:right;font-family:var(--mono)">${p.war162.toFixed(2)}</td>
   </tr>`).join('');
 
   document.getElementById('tm-bullpen').innerHTML = `
-    <table class="dt" style="font-size:10px;">
-      <thead><tr><th>Name</th><th style="text-align:right">G</th><th style="text-align:right">WAR</th></tr></thead>
-      <tbody>${bpRows || '<tr><td colspan="3" class="nd">No data</td></tr>'}</tbody>
+    <table class="dt">
+      <thead><tr><th>#</th><th>Pitcher</th><th style="text-align:right">G</th><th style="text-align:right">GS</th><th style="text-align:right">IP</th><th style="text-align:right">WAR</th><th style="text-align:right">WAR/162</th></tr></thead>
+      <tbody>${bpRows || '<tr><td colspan="7" class="nd">No data</td></tr>'}</tbody>
     </table>`;
 
   // Hitters: sorted by WAR desc
@@ -2676,7 +2683,7 @@ function renderTeam(abr){
     const paShare = totalTeamPA ? ((p.pa / totalTeamPA) * 100).toFixed(1) + '%' : '—';
     return `<tr>
       <td style="color:var(--muted)">${i+1}</td>
-      <td>${p.name}</td>
+      <td style="white-space:nowrap">${p.mlbamid ? `<img src="https://img.mlbstatic.com/mlb-photos/image/upload/w_60,q_80/v1/people/${p.mlbamid}/headshot/67/current" width="24" height="24" style="border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />` : ''}${p.name}</td>
       <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${p.g}</td>
       <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${Math.round(p.pa)}</td>
       <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${paShare}</td>
@@ -2848,10 +2855,10 @@ async function fetchProjections(force=false){
     const ft = t => FG_TEAM_MAP_SLIM[t] || t;
     const slimBat = batData
       .filter(p => (parseFloat(p.PA)||0) >= 10)
-      .map(p => [p.PlayerName||p.Name||'', ft(p.Team||''), Math.round(p.G||0), Math.round(p.PA||0), parseFloat(p.WAR)||0]);
+      .map(p => [p.PlayerName||p.Name||'', ft(p.Team||''), Math.round(p.G||0), Math.round(p.PA||0), parseFloat(p.WAR)||0, p.xMLBAMID||p.mlbamid||0]);
     const slimPit = pitData
       .filter(p => (parseFloat(p.IP)||0) >= 5)
-      .map(p => [p.PlayerName||p.Name||'', ft(p.Team||''), Math.round(p.G||0), Math.round(p.GS||0), parseFloat(p.IP)||0, parseFloat(p.WAR)||0]);
+      .map(p => [p.PlayerName||p.Name||'', ft(p.Team||''), Math.round(p.G||0), Math.round(p.GS||0), parseFloat(p.IP)||0, parseFloat(p.WAR)||0, p.xMLBAMID||p.mlbamid||0]);
 
     console.log('Slim data:', slimBat.length, 'hitters,', slimPit.length, 'pitchers');
 
@@ -2885,8 +2892,8 @@ function applyProjections(payload){
   let newHitters, newPitchers;
   if(payload.slim){
     // Slim format: arrays of [name, team, g, pa, war] / [name, team, g, gs, ip, war]
-    newHitters  = bat.map(r => ({name:r[0], team:r[1], g:r[2], pa:r[3], war:r[4]})).filter(p => p.name && p.pa >= 10);
-    newPitchers = pit.map(r => ({name:r[0], team:r[1], g:r[2], gs:r[3], ip:r[4], war:r[5]})).filter(p => p.name && p.ip >= 5);
+    newHitters  = bat.map(r => ({name:r[0], team:r[1], g:r[2], pa:r[3], war:r[4], mlbamid:r[5]||0})).filter(p => p.name && p.pa >= 10);
+    newPitchers = pit.map(r => ({name:r[0], team:r[1], g:r[2], gs:r[3], ip:r[4], war:r[5], mlbamid:r[6]||0})).filter(p => p.name && p.ip >= 5);
   } else {
     // Full FG object format (direct from API before slimming)
     newHitters = bat
