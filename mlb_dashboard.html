@@ -640,6 +640,7 @@ input[type=number] { -moz-appearance:textfield; }
   <button onclick="showPanel('proj-p',this)">🎯 Pitchers</button>
   <button onclick="showPanel('br',this)">💰 Bankroll</button>
   <button onclick="showPanel('teams',this)">🏟 Teams</button>
+  <button onclick="showPanel('standings',this)">🏆 Standings</button>
   <button onclick="showPanel('tools',this)">🔧 Tools</button>
 </nav>
 
@@ -831,6 +832,21 @@ input[type=number] { -moz-appearance:textfield; }
 </div>
 
 <!-- ══ TOOLS ══ -->
+
+<!-- ══ STANDINGS ══ -->
+<div id="panel-standings" class="panel">
+  <div class="api-bar" style="margin-bottom:12px;justify-content:space-between;">
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="btn bg" onclick="fetchStandings()" id="standings-refresh-btn" style="font-size:11px;padding:6px 10px;">↻ Refresh</button>
+      <span id="standings-status" style="font-size:11px;color:var(--muted);"></span>
+    </div>
+    <div style="display:flex;gap:6px;">
+      <button class="fb active" id="stn-al" onclick="showLeague('AL',this)" style="font-size:11px;">AL</button>
+      <button class="fb" id="stn-nl" onclick="showLeague('NL',this)" style="font-size:11px;">NL</button>
+    </div>
+  </div>
+  <div id="standings-body" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;"></div>
+</div>
 <div id="panel-tools" class="panel">
   <div class="g2">
     <div class="card">
@@ -2469,6 +2485,7 @@ function showPanel(name,btn){
   if(name==='proj-h')rProjH();
   if(name==='proj-p')rProjP();
   if(name==='br')rBRChart();
+  if(name==='standings'){fetchStandings();}
 }
 function toast(msg,type){const el=document.getElementById('toast');el.textContent=msg;el.className='toast'+(type==='err'?' err':'')+' show';setTimeout(()=>el.classList.remove('show'),2500);}
 
@@ -2789,32 +2806,44 @@ const PROJ_LS_KEY   = 'mlb_proj_data';
 const PROJ_LS_TS    = 'mlb_proj_ts';
 const PROJ_MAX_AGE  = 22 * 60 * 60 * 1000; // 22 hours
 
+function setProjBtns(text, disabled){
+  document.querySelectorAll('.proj-refresh-btn').forEach(b => { b.textContent = text; b.disabled = disabled; });
+}
+
 async function fetchProjections(force=false){
-  const btns = document.querySelectorAll('.proj-refresh-btn');
   const cached = localStorage.getItem(PROJ_LS_KEY);
   const ts     = parseInt(localStorage.getItem(PROJ_LS_TS)||'0');
   const age    = Date.now() - ts;
 
   if(!force && cached && age < PROJ_MAX_AGE){
-    applyProjections(JSON.parse(cached));
+    try { applyProjections(JSON.parse(cached)); } catch(e) { console.warn('Cache load failed, fetching fresh', e); }
     return;
   }
 
-  btns.forEach(b => { b.textContent = '⟳ Fetching…'; b.disabled = true; });
+  setProjBtns('⟳ Fetching…', true);
 
   try {
     const base = (typeof PROXY_BASE !== 'undefined') ? PROXY_BASE : '';
+    console.log('Fetching projections from', base + '/fg-proj/');
+
     const [batRes, pitRes] = await Promise.all([
       fetch(`${base}/fg-proj/?type=steamer&stats=bat&pos=all&team=0&players=0&lg=all`),
       fetch(`${base}/fg-proj/?type=steamer&stats=pit&pos=all&team=0&players=0&lg=all`),
     ]);
 
-    if(!batRes.ok || !pitRes.ok) throw new Error(`HTTP ${batRes.status}/${pitRes.status}`);
+    console.log('Bat response:', batRes.status, 'Pit response:', pitRes.status);
+
+    if(!batRes.ok || !pitRes.ok){
+      const batErr = await batRes.text().catch(()=>'');
+      throw new Error(`HTTP ${batRes.status}/${pitRes.status} — ${batErr.slice(0,100)}`);
+    }
 
     const batData = await batRes.json();
     const pitData = await pitRes.json();
+    console.log('Raw data:', batData.length, 'hitters,', pitData.length, 'pitchers');
 
-    // Slim to only needed fields before storing — avoids localStorage quota (~5MB limit)
+    if(!Array.isArray(batData) || !Array.isArray(pitData)) throw new Error('Unexpected response format — not an array');
+
     const FG_TEAM_MAP_SLIM = {'SF':'SFG','SD':'SDP','KC':'KCR','TB':'TBR','WSH':'WSN','OAK':'ATH','CWS':'CHW'};
     const ft = t => FG_TEAM_MAP_SLIM[t] || t;
     const slimBat = batData
@@ -2823,17 +2852,25 @@ async function fetchProjections(force=false){
     const slimPit = pitData
       .filter(p => (parseFloat(p.IP)||0) >= 5)
       .map(p => [p.PlayerName||p.Name||'', ft(p.Team||''), Math.round(p.G||0), Math.round(p.GS||0), parseFloat(p.IP)||0, parseFloat(p.WAR)||0]);
+
+    console.log('Slim data:', slimBat.length, 'hitters,', slimPit.length, 'pitchers');
+
     const payload = { bat: slimBat, pit: slimPit, slim: true };
-    localStorage.setItem(PROJ_LS_KEY, JSON.stringify(payload));
-    localStorage.setItem(PROJ_LS_TS, String(Date.now()));
+    try {
+      localStorage.setItem(PROJ_LS_KEY, JSON.stringify(payload));
+      localStorage.setItem(PROJ_LS_TS, String(Date.now()));
+    } catch(storageErr) {
+      console.warn('localStorage save failed (quota?):', storageErr);
+      toast('Projections fetched but could not save to cache', 'err');
+    }
 
     applyProjections(payload);
     toast('Projections updated ✓');
   } catch(e) {
     console.error('Projection fetch failed:', e);
-    toast('Projection fetch failed: ' + e.message, 'err');
+    toast('Fetch failed: ' + e.message, 'err');
   } finally {
-    btns.forEach(b => { b.textContent = '⟳ Projections'; b.disabled = false; });
+    setProjBtns('⟳ Projections', false);
   }
 }
 
@@ -2906,6 +2943,98 @@ function applyProjections(payload){
     fetchProjections(true);
   }
 })();
+
+// ═══════════════════════════════════════════════
+// STANDINGS
+// ═══════════════════════════════════════════════
+let _standingsData = null;
+let _standingsLeague = 'AL';
+
+function showLeague(lg, btn){
+  _standingsLeague = lg;
+  document.querySelectorAll('#stn-al,#stn-nl').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderStandings();
+}
+
+async function fetchStandings(){
+  const btn = document.getElementById('standings-refresh-btn');
+  const status = document.getElementById('standings-status');
+  btn.textContent = '↻ Fetching…'; btn.disabled = true;
+  status.textContent = '';
+  try {
+    const url = `${PROXY_BASE}/mlb-api/standings?leagueId=103,104&season=2026&standingsTypes=regularSeason&hydrate=team`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    _standingsData = data.records || [];
+    const ts = new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    status.textContent = 'Updated ' + ts;
+    renderStandings();
+  } catch(e) {
+    status.textContent = 'Failed: ' + e.message;
+    console.error('Standings fetch failed:', e);
+  } finally {
+    btn.textContent = '↻ Refresh'; btn.disabled = false;
+  }
+}
+
+function renderStandings(){
+  const body = document.getElementById('standings-body');
+  if(!_standingsData || !_standingsData.length){
+    body.innerHTML = '<div style="color:var(--muted);font-size:13px;grid-column:1/-1;text-align:center;padding:40px;">Click Refresh to load standings.</div>';
+    return;
+  }
+
+  // Division id→name map
+  const DIV_NAMES = {200:'AL West',201:'AL East',202:'AL Central',203:'NL West',204:'NL East',205:'NL Central'};
+  const AL_DIVS = [201,202,200];
+  const NL_DIVS = [204,205,203];
+  const divIds = _standingsLeague === 'AL' ? AL_DIVS : NL_DIVS;
+
+  body.innerHTML = divIds.map(divId => {
+    const rec = _standingsData.find(r => r.division?.id === divId);
+    if(!rec) return '';
+    const rows = (rec.teamRecords || []).map((t,i) => {
+      const abr = MLB_ID_TO_ABR[t.team?.id] || t.team?.abbreviation || '?';
+      const info = TEAM_INFO[abr] || {};
+      const gb = t.gamesBack === '-' || t.gamesBack === '0' ? '—' : t.gamesBack;
+      const pct = parseFloat(t.winningPercentage||0).toFixed(3).replace(/^0/,'');
+      const streak = t.streak?.streakCode || '';
+      const l10 = t.records?.splitRecords?.find(s=>s.type==='lastTen');
+      const l10str = l10 ? `${l10.wins}-${l10.losses}` : '';
+      const isFirst = i === 0;
+      return `<tr style="${isFirst?'font-weight:600;':''}">
+        <td style="padding:5px 8px;white-space:nowrap;">
+          <img src="${teamLogo(abr)}" width="16" height="16" style="object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display='none'" />
+          <span style="color:${info.primary||'var(--text)'};">${abr}</span>
+        </td>
+        <td style="text-align:right;padding:5px 6px;font-family:var(--mono)">${t.wins}</td>
+        <td style="text-align:right;padding:5px 6px;font-family:var(--mono)">${t.losses}</td>
+        <td style="text-align:right;padding:5px 6px;font-family:var(--mono)">${pct}</td>
+        <td style="text-align:right;padding:5px 6px;font-family:var(--mono);color:var(--muted)">${gb}</td>
+        <td style="text-align:right;padding:5px 6px;font-family:var(--mono);font-size:10px;color:var(--muted)">${l10str}</td>
+        <td style="text-align:right;padding:5px 6px;font-family:var(--mono);font-size:10px;color:${streak.startsWith('W')?'var(--green)':'var(--red)'}">${streak}</td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="card" style="padding:0;overflow:hidden;">
+      <div style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);border-bottom:1px solid var(--border);">${DIV_NAMES[divId]||''}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead><tr style="border-bottom:1px solid var(--border);">
+          <th style="padding:4px 8px;text-align:left;font-size:10px;color:var(--muted);font-weight:600;">Team</th>
+          <th style="padding:4px 6px;text-align:right;font-size:10px;color:var(--muted);font-weight:600;">W</th>
+          <th style="padding:4px 6px;text-align:right;font-size:10px;color:var(--muted);font-weight:600;">L</th>
+          <th style="padding:4px 6px;text-align:right;font-size:10px;color:var(--muted);font-weight:600;">PCT</th>
+          <th style="padding:4px 6px;text-align:right;font-size:10px;color:var(--muted);font-weight:600;">GB</th>
+          <th style="padding:4px 6px;text-align:right;font-size:10px;color:var(--muted);font-weight:600;">L10</th>
+          <th style="padding:4px 6px;text-align:right;font-size:10px;color:var(--muted);font-weight:600;">STK</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }).join('');
+}
 </script>
 </body>
 </html>
