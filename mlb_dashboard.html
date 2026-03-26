@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>v10 MLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -1149,11 +1149,18 @@ const PROXY_BASE = isLocal ? `${window.location.protocol}//${window.location.hos
 // STORE
 // ═══════════════════════════════════════════════
 const S={games:[],spOverrides:{},ipOverrides:{},picks:[],br:{start:10000,unit:100,kelly:0.5,maxPct:3},apiKey:'',lastFetch:null};
-function save(){try{localStorage.setItem('mlb26v3',JSON.stringify(S));}catch(e){} saveToFirebase();}
+function save(){
+  // Save everything EXCEPT games to localStorage — games live in Firestore by date
+  try{
+    const {games, ...rest} = S;
+    localStorage.setItem('mlb26v3', JSON.stringify(rest));
+  }catch(e){}
+  saveToFirebase();
+}
 function load(){
   try{
     const d=JSON.parse(localStorage.getItem('mlb26v3')||'{}');
-    if(d.games)S.games=d.games;
+    // Games are loaded from Firestore by date, not localStorage
     if(d.spOverrides)S.spOverrides=d.spOverrides;
     if(d.ipOverrides)S.ipOverrides=d.ipOverrides;
     if(d.picks)S.picks=d.picks;
@@ -2526,7 +2533,9 @@ function revertSP(gid, side){
 function onDateChange(){
   const date = getActiveDate();
   localStorage.setItem('mlb_active_date', date);
-  if(_gamesUnsub) subscribeToGamesDate(date); // re-subscribe if Firebase is ready
+  S.games = []; // Clear immediately — new date has its own games
+  rGames();
+  subscribeToGamesDate(date); // Re-subscribe to new date (works even before fetch)
   fetchMLBGames();
 }
 
@@ -2535,12 +2544,12 @@ function shiftDate(days){
   const d = el.value ? new Date(el.value + 'T12:00:00') : new Date();
   d.setDate(d.getDate() + days);
   el.value = d.toISOString().slice(0,10);
-  fetchMLBGames();
+  onDateChange();
 }
 function goToday(){
   const el = document.getElementById('game-date');
   el.valueAsDate = new Date();
-  fetchMLBGames();
+  onDateChange();
 }
 
 function logTeam(el){
