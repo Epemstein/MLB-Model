@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MLB ALGO 2026</title>
+<title>v3 MLB ALGO 2026</title>
 
 <style>
 
@@ -1572,6 +1572,7 @@ async function fetchOdds(){
     status.textContent=`✓ ${S.games.length} games loaded`;
     logActivity(`Fetched lineups: ${S.games.length} games loaded`);
     rGames();
+    logActivity(`Fetched lineups: ${S.games.length} games loaded`);
     toast(`${S.games.length} games loaded from Odds API!`);
   }catch(err){
     console.error(err);
@@ -1671,7 +1672,7 @@ function buildSpOverrides(){
 }
 
 function setSP(gameId, field, val){
-  if(_currentUser && field==='awName' || field==='hwName') logActivity(`Changed SP: ${val} (${gameId})`);
+  if(_currentUser && (field==='awName' || field==='hwName')){ logActivity(`Changed SP to ${val}`); }
   if(!S.spOverrides[gameId]) S.spOverrides[gameId]={};
   S.spOverrides[gameId][field]=val;
   save();
@@ -2250,6 +2251,7 @@ function updGStats(calcs){
 }
 
 let _myOddsTimer = null;
+let _suppressGamesListener = false;
 function setMyOdds(gid, side, val){
   const g = S.games.find(g=>String(g.id)===String(gid));
   if(!g) return;
@@ -2268,9 +2270,13 @@ function setMyOdds(gid, side, val){
   // Update edge display immediately on every keystroke
   const calcs = S.games.map(g=>({g,r:modelCalc(g)})).filter(({r})=>r&&r.awWP!=null);
   updGStatsEdgeOnly(calcs);
-  // Debounce Firebase save only
+  // Debounce Firebase save, suppress listener re-render while typing
+  _suppressGamesListener = true;
   clearTimeout(_myOddsTimer);
-  _myOddsTimer = setTimeout(() => saveToFirebase(), 1000);
+  _myOddsTimer = setTimeout(() => {
+    saveToFirebase();
+    setTimeout(() => { _suppressGamesListener = false; }, 500);
+  }, 1000);
 }
 
 function updGStatsEdgeOnly(calcs){
@@ -2609,7 +2615,10 @@ function getPitcherWar162(p){
 }
 
 function setIpOverride(name, team, val){
-  if(_currentUser){ const isRevert2 = isNaN(parseFloat(val))||parseFloat(val)<=0; logActivity(isRevert2 ? `Reverted IP/Start: ${name} (${team})` : `Set IP/Start: ${name} (${team}) → ${val}`); }
+  const _ipN = parseFloat(val);
+  const isRevert2 = isNaN(_ipN) || _ipN <= 0;
+  if(_currentUser && isRevert2) logActivity(`Reverted IP/Start: ${name} (${team})`);
+  else if(_currentUser && !isRevert2 && val.trim().length > 0) logActivity(`Set IP/Start: ${name} (${team}) → ${val}`);
   const key = name + '|' + team;
   const n = parseFloat(val);
   const isRevert = isNaN(n) || n <= 0;
@@ -3513,7 +3522,7 @@ function setupRealtimeListeners(){
   // ── Games: real-time listener for today ──
   const today = new Date().toISOString().slice(0,10);
   db.collection('games').doc(today).onSnapshot(snap => {
-    if(snap.exists){
+    if(snap.exists && !_suppressGamesListener){
       const dbGames = snap.data().games || [];
       const local = JSON.parse(localStorage.getItem('mlb26v3')||'{}');
       const localGames = local.games || [];
