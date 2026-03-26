@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>v1 MLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -828,7 +828,7 @@ input[type=number] { -moz-appearance:textfield; }
     </div>
     <div class="sw"><table class="dt" style="font-size:11px;">
       <thead><tr>
-        <th style="width:42px">Bet No.</th>
+        <th style="width:28px">#</th>
         <th>Player</th>
         <th>Team</th>
         <th style="text-align:right">G</th>
@@ -856,7 +856,7 @@ input[type=number] { -moz-appearance:textfield; }
     </div>
     <div class="sw"><table class="dt" style="font-size:11px;">
       <thead><tr>
-        <th style="width:42px">Bet No.</th>
+        <th style="width:28px">#</th>
         <th>Player</th>
         <th>Team</th>
         <th style="text-align:right">G</th>
@@ -3238,7 +3238,7 @@ function applyProjections(payload){
 
 // On load: use cache if fresh, auto-fetch if stale or missing
 // Auto-fetch standings on load
-document.addEventListener('DOMContentLoaded', () => fetchStandings());
+// Standings fetched after login in loadFromFirebase
 
 (function initProjections(){
   const cached = localStorage.getItem(PROJ_LS_KEY);
@@ -3589,6 +3589,7 @@ async function loadFromFirebase(){
 
     // Initial render
     rGames(); rPerf(); loadBRUI();
+    fetchStandings();
 
     // Now set up real-time listeners (picks + activity)
     setupRealtimeListeners();
