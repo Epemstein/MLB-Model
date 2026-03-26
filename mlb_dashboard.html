@@ -1613,18 +1613,23 @@ function modelCalc(g){
   function stageCalc(team, td, spWar162, projWins, overrides, isHome){
     const teamName = team === 'aw' ? g.away : g.home;
 
-    // 1. Projected Starters = sum of top-9 hitters' s600 WAR × 1.08
-    let lineup = (td.hitters||[])
-      .filter(p=>p.s600 && p.war>0)
-      .sort((a,b)=>b.war-a.war)
-      .slice(0,9);
+    // 1. Projected Starters = sum of top-9 hitters' WAR/162 × 1.08
+    //    WAR/162 = (pa/g) * (war/pa) * 162 — derived from PROJ_HITTERS
+    let lineup = PROJ_HITTERS
+      .filter(p => p.team === teamName && p.war > 0)
+      .sort((a,b) => b.war - a.war)
+      .slice(0, 9)
+      .map(p => ({...p, war162: p.g > 0 ? (p.pa/p.g)*(p.pa>0?p.war/p.pa:0)*162 : 0}));
     if(overrides){
-      lineup = lineup.map((p,i)=>{
+      lineup = lineup.map((p,i) => {
         const ov = overrides[`${team==='aw'?'aw':'hw'}_${i}`];
-        return ov ? {name:ov.name, s600:ov.s600, war:ov.war} : p;
+        if(!ov) return p;
+        const ovP = PROJ_HITTERS.find(h => h.name === ov.name) || p;
+        const war162 = ovP.g > 0 ? (ovP.pa/ovP.g)*(ovP.pa>0?ovP.war/ovP.pa:0)*162 : 0;
+        return {...p, name:ov.name, war:ov.war, war162};
       });
     }
-    const projStarters = lineup.reduce((s,p)=>s+(p.s600||0), 0) * 1.08;
+    const projStarters = lineup.reduce((s,p) => s + (p.war162||0), 0) * 1.08;
 
     // 2. Rotation Baseline = sum of WAR/162 for top 5 starters by GS
     const rotation = getTeamRotationBaseline(teamName);
