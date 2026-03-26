@@ -720,7 +720,7 @@ input[type=number] { -moz-appearance:textfield; }
       <div class="fg"><label class="fl">Odds</label><input type="number" id="p-od" placeholder="+130" oninput="autoCalcEdge()"/></div>
       <div class="fg"><label class="fl">xWP %</label><input type="number" id="p-xwp" placeholder="52.9" step="0.01" oninput="autoCalcEdge()" readonly style="background:#f8f8f8;color:var(--muted)"/></div>
       <div class="fg"><label class="fl">Edge %</label><input type="number" id="p-ed" placeholder="auto" step="0.01" readonly style="background:#f8f8f8;color:var(--muted)"/></div>
-      <div class="fg"><label class="fl">Units</label><input type="number" id="p-un" value="1" step="0.5"/></div>
+      <div class="fg"><label class="fl">1u Units</label><input type="number" id="p-un" value="1" step="0.5"/></div>
       <div class="fg"><label class="fl">Result</label>
         <select id="p-rs"><option value="Pending">Pending</option><option value="Win">Win</option><option value="Loss">Loss</option></select>
       </div>
@@ -729,7 +729,11 @@ input[type=number] { -moz-appearance:textfield; }
   </div>
   <div class="card">
     <div class="ct">Pick Log <span id="p-ct" style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);"></span></div>
-    <div class="sw"><table class="dt"><thead><tr><th>#</th><th>Date</th><th>Pick</th><th>Opp</th><th>Game Time</th><th>Odds</th><th>xWP</th><th>Edge</th><th>Units</th><th>Result</th><th>Won</th><th>Running</th><th>Placed</th><th></th></tr></thead><tbody id="pb"><tr><td colspan="14" class="nd">No picks yet.</td></tr></tbody></table></div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:6px;gap:6px;">
+      <button class="fb active" id="ptog-flat" onclick="setPickView('flat',this)">Flat (Units)</button>
+      <button class="fb" id="ptog-kelly" onclick="setPickView('kelly',this)">Kelly (%)</button>
+    </div>
+    <div class="sw"><table class="dt"><thead><tr><th style="width:28px">#</th><th style="width:28px"></th><th style="width:90px;white-space:nowrap">Placed</th><th style="width:70px">Date</th><th style="width:60px">Pick</th><th style="width:80px">Opp</th><th style="width:90px">Game Time</th><th style="width:60px">Odds</th><th style="width:45px">xWP</th><th style="width:55px">Edge</th><th style="width:55px" id="th-bet">Bet</th><th style="width:60px">Result</th><th style="width:65px" id="th-won">Won</th><th style="width:75px" id="th-run">Running</th><th style="width:28px"></th></tr></thead><tbody id="pb"><tr><td colspan="14" class="nd">No picks yet.</td></tr></tbody></table></div>
   </div>
 </div>
 
@@ -1915,6 +1919,18 @@ function toggleDrawer(id){
 // ═══════════════════════════════════════════════
 // PICKS
 // ═══════════════════════════════════════════════
+
+function calcKellyUnits(od, edge, brKelly, brMaxPct){
+  // Kelly: f = edge% / (decimal_odds - 1), scaled by kelly fraction, capped at maxPct
+  const dec = od >= 0 ? (od/100 + 1) : (100/Math.abs(od) + 1);
+  const b = dec - 1;
+  if(b <= 0 || edge <= 0) return 0;
+  const f = (edge/100) / b;
+  const kelly = f * (brKelly || 0.5);
+  const maxF = (brMaxPct || 3) / 100;
+  return Math.min(kelly, maxF) * 100; // return as units (assuming 1u = 1% of bankroll)
+}
+
 function autoCalcEdge(){
   const od = parseFloat(document.getElementById('p-od').value);
   const xwp = parseFloat(document.getElementById('p-xwp').value);
@@ -1939,18 +1955,35 @@ function addPick(){
   if(!dt||!tx||isNaN(od)){toast('Fill date, pick, and odds.','err');return;}
   const imp = od>=0 ? 100/(od+100) : Math.abs(od)/(Math.abs(od)+100);
   const edFinal = !isNaN(ed) ? ed : (!isNaN(xwp) ? (xwp/100 - imp)*100 : 0);
-  const uw = rs==='Win'?un*(aToDec(od)-1):rs==='Loss'?-un:0;
-  S.picks.push({id:Date.now(),dt,gt,tx,opp,ha,od,ed:edFinal,xwp,un,rs,uw,tp});
+  const ku  = calcKellyUnits(od, edFinal, S.br.kelly, S.br.maxPct);
+  const uw  = rs==='Win'?un*(aToDec(od)-1):rs==='Loss'?-un:0;
+  const kuw = rs==='Win'?ku*(aToDec(od)-1):rs==='Loss'?-ku:0;
+  S.picks.push({id:Date.now(),dt,gt,tx,opp,ha,od,ed:edFinal,xwp,un,ku,rs,uw,kuw,tp});
   save();rPicks();rPerf();
   ['p-tx','p-opp','p-od','p-xwp','p-ed','p-gt'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('p-ha').textContent='vs';
   document.getElementById('p-un').value='1';document.getElementById('p-rs').value='Pending';
   toast('Pick logged!');
 }
+
+let _pickView = 'flat'; // 'flat' or 'kelly'
+let _editPickId = null;
+function setPickView(view, btn){
+  _pickView = view;
+  document.querySelectorAll('#ptog-flat,#ptog-kelly').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const isKelly = view === 'kelly';
+  document.getElementById('th-bet').textContent = isKelly ? 'Bet %' : 'Bet';
+  document.getElementById('th-won').textContent = isKelly ? 'Won ($)' : 'Won';
+  document.getElementById('th-run').textContent = isKelly ? 'Running ($)' : 'Running';
+  rPicks();
+}
+
 function delPick(id){S.picks=S.picks.filter(p=>p.id!==id);save();rPicks();rPerf();}
 function updPick(id,rs){
   const p=S.picks.find(p=>p.id===id);if(!p)return;
   p.rs=rs;p.uw=rs==='Win'?p.un*(aToDec(p.od)-1):rs==='Loss'?-p.un:0;
+  p.kuw=rs==='Win'?(p.ku||0)*(aToDec(p.od)-1):rs==='Loss'?-(p.ku||0):0;
   save();rPicks();rPerf();
 }
 function rPicks(){
@@ -1959,27 +1992,42 @@ function rPicks(){
   if(!S.picks.length){b.innerHTML='<tr><td colspan="14" class="nd">No picks yet.</td></tr>';return;}
   let run=0;
   b.innerHTML=S.picks.map((p,i)=>{
-    if(p.rs!=='Pending')run+=p.uw;
-    const rc=run>=0?'var(--green)':'var(--red)';
-    const wc=p.uw>0?'var(--green)':p.uw<0?'var(--red)':'var(--muted)';
+    if(p.rs!=='Pending') run += _pickView==='kelly' ? (p.kuw||0) : p.uw;
+    const rc = run>=0?'var(--green)':'var(--red)';
+    const isKelly = _pickView === 'kelly';
+    const start = S.br.start || 10000;
+    // Flat: units bet/won/running
+    // Kelly: % of bankroll bet, $ won, $ running
+    const betStr  = isKelly ? (p.ku?p.ku.toFixed(2)+'%':'—') : p.un+'u';
+    const wonVal  = isKelly ? (p.kuw||0)*start/100 : p.uw;
+    const runVal  = isKelly ? run*start/100 : run;
+    const wonStr  = p.rs==='Pending' ? '—' : isKelly
+      ? (wonVal>=0?'+':'')+'$'+Math.abs(wonVal).toFixed(0)
+      : (p.uw>0?'+':'')+p.uw.toFixed(2)+'u';
+    const runStr  = p.rs==='Pending' ? '—' : isKelly
+      ? (runVal>=0?'+':'')+'$'+Math.abs(runVal).toFixed(0)
+      : (run>=0?'+':'')+run.toFixed(2)+'u';
+    const wc = isKelly ? (wonVal>0?'var(--green)':wonVal<0?'var(--red)':'var(--muted)')
+                       : (p.uw>0?'var(--green)':p.uw<0?'var(--red)':'var(--muted)');
     return `<tr>
-      <td style="color:var(--muted)">${i+1}</td>
-      <td style="white-space:nowrap">${p.dt}</td>
+      <td style="color:var(--muted);text-align:center">${i+1}</td>
+      <td style="text-align:center"><button class="btn bg" style="padding:2px 6px;font-size:9px;" onclick="openEditPick(${p.id})">✎</button></td>
+      <td style="color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${p.tp||'—'}</td>
+      <td style="white-space:nowrap;font-size:11px">${p.dt}</td>
       <td style="font-weight:600">${p.tx||'—'}</td>
       <td style="color:var(--muted)">${p.ha||'vs'} ${p.opp||'—'}</td>
-      <td style="color:var(--muted);font-size:10px;white-space:nowrap">${p.gt||'—'}</td>
-      <td>${p.od>0?'+':''}${p.od}</td>
-      <td style="color:var(--muted)">${p.xwp?p.xwp.toFixed(1)+'%':'—'}</td>
-      <td style="color:${p.ed>=5?'var(--green)':p.ed>=3?'var(--yellow)':'var(--muted)'}">${p.ed>=0?'+':''}${p.ed.toFixed(1)}%</td>
-      <td>${p.un}u</td>
+      <td style="color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${p.gt||'—'}</td>
+      <td style="text-align:right">${p.od>0?'+':''}${p.od}</td>
+      <td style="color:var(--muted);text-align:right">${p.xwp?p.xwp.toFixed(1)+'%':'—'}</td>
+      <td style="color:${p.ed>0?'var(--green)':p.ed<0?'var(--red)':'var(--muted)'};text-align:right">${p.ed>=0?'+':''}${p.ed.toFixed(1)}%</td>
+      <td style="text-align:right">${betStr}</td>
       <td><select style="background:transparent;border:1px solid var(--border);color:${p.rs==='Win'?'var(--green)':p.rs==='Loss'?'var(--red)':'var(--accent)'};font-size:10px;padding:2px 4px;" onchange="updPick(${p.id},this.value)">
         <option value="Pending" ${p.rs==='Pending'?'selected':''}>Pending</option>
         <option value="Win" ${p.rs==='Win'?'selected':''}>Win</option>
         <option value="Loss" ${p.rs==='Loss'?'selected':''}>Loss</option>
       </select></td>
-      <td style="color:${wc}">${p.rs==='Pending'?'—':(p.uw>0?'+':'')+p.uw.toFixed(2)+'u'}</td>
-      <td style="color:${rc};font-weight:600">${p.rs!=='Pending'?(run>=0?'+':'')+run.toFixed(2)+'u':'—'}</td>
-      <td style="color:var(--muted);font-size:9px;white-space:nowrap">${p.tp||'—'}</td>
+      <td style="color:${wc};text-align:right">${wonStr}</td>
+      <td style="color:${rc};font-weight:600;text-align:right">${runStr}</td>
       <td><button class="btn bd" style="padding:3px 7px;font-size:9px" onclick="delPick(${p.id})">✕</button></td>
     </tr>`;
   }).join('');
@@ -3146,6 +3194,114 @@ function renderStandings(){
     </div>`;
   }).join('');
 }
+
+// ═══════════════════════════════════════════════
+// EDIT PICK MODAL
+// ═══════════════════════════════════════════════
+
+function openEditPick(id){
+  const p = S.picks.find(p => p.id === id);
+  if(!p) return;
+  _editPickId = id;
+  document.getElementById('ep-tp').value  = p.tp || '';
+  document.getElementById('ep-dt').value  = p.dt || '';
+  document.getElementById('ep-gt').value  = p.gt || '';
+  document.getElementById('ep-tx').value  = p.tx || '';
+  document.getElementById('ep-opp').value = p.opp || '';
+  document.getElementById('ep-ha').value  = p.ha || 'vs';
+  document.getElementById('ep-od').value  = p.od || '';
+  document.getElementById('ep-xwp').value = p.xwp || '';
+  document.getElementById('ep-ed').value  = p.ed != null ? p.ed : '';
+  document.getElementById('ep-un').value  = p.un || 1;
+  document.getElementById('ep-rs').value  = p.rs || 'Pending';
+  document.getElementById('edit-pick-modal').style.display = 'flex';
+}
+
+function closeEditPick(){
+  document.getElementById('edit-pick-modal').style.display = 'none';
+  _editPickId = null;
+}
+
+function epAutoCalc(){
+  const od  = parseFloat(document.getElementById('ep-od').value);
+  const xwp = parseFloat(document.getElementById('ep-xwp').value);
+  if(!isNaN(od) && !isNaN(xwp)){
+    const imp  = od>=0 ? 100/(od+100) : Math.abs(od)/(Math.abs(od)+100);
+    const edge = (xwp/100 - imp)*100;
+    document.getElementById('ep-ed').value = edge.toFixed(2);
+  }
+}
+
+function saveEditPick(){
+  const p = S.picks.find(p => p.id === _editPickId);
+  if(!p) return;
+  p.tp  = document.getElementById('ep-tp').value.trim() || p.tp;
+  p.dt  = document.getElementById('ep-dt').value;
+  p.gt  = document.getElementById('ep-gt').value.trim();
+  p.tx  = document.getElementById('ep-tx').value.trim();
+  p.opp = document.getElementById('ep-opp').value.trim();
+  p.ha  = document.getElementById('ep-ha').value;
+  p.od  = parseFloat(document.getElementById('ep-od').value) || p.od;
+  p.xwp = parseFloat(document.getElementById('ep-xwp').value) || p.xwp;
+  p.ed  = parseFloat(document.getElementById('ep-ed').value) || p.ed;
+  p.un  = parseFloat(document.getElementById('ep-un').value) || 1;
+  p.rs  = document.getElementById('ep-rs').value;
+  // Recalc kelly and P&L
+  p.ku  = calcKellyUnits(p.od, p.ed, S.br.kelly, S.br.maxPct);
+  p.uw  = p.rs==='Win' ? p.un*(aToDec(p.od)-1) : p.rs==='Loss' ? -p.un : 0;
+  p.kuw = p.rs==='Win' ? p.ku*(aToDec(p.od)-1) : p.rs==='Loss' ? -p.ku : 0;
+  save();
+  closeEditPick();
+  rPicks();
+  rPerf();
+  toast('Pick updated!');
+}
+
+// Close on backdrop click
+document.addEventListener('DOMContentLoaded', function(){
+  document.getElementById('edit-pick-modal').addEventListener('click', function(e){
+    if(e.target === this) closeEditPick();
+  });
+});
 </script>
+
+<!-- ══ EDIT PICK MODAL ══ -->
+<div id="edit-pick-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:8px;width:min(480px,95vw);max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);">
+      <div style="font-size:13px;font-weight:700;color:var(--text);">Edit Pick</div>
+      <span onclick="closeEditPick()" style="cursor:pointer;color:var(--muted);font-size:18px;line-height:1;">×</span>
+    </div>
+    <div style="padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div><label class="fl">Time Placed</label><input type="text" id="ep-tp" placeholder="3/25/2026, 9:00 AM" style="width:100%;box-sizing:border-box"/></div>
+      <div><label class="fl">Game Date</label><input type="date" id="ep-dt" style="width:100%;box-sizing:border-box"/></div>
+      <div><label class="fl">Game Time</label><input type="text" id="ep-gt" style="width:100%;box-sizing:border-box"/></div>
+      <div><label class="fl">Pick</label><input type="text" id="ep-tx" style="width:100%;box-sizing:border-box"/></div>
+      <div><label class="fl">Opponent</label><input type="text" id="ep-opp" style="width:100%;box-sizing:border-box"/></div>
+      <div><label class="fl">Home/Away</label>
+        <select id="ep-ha" style="width:100%;box-sizing:border-box">
+          <option value="vs">vs (Home)</option>
+          <option value="@">@ (Away)</option>
+        </select>
+      </div>
+      <div><label class="fl">Odds</label><input type="number" id="ep-od" oninput="epAutoCalc()" style="width:100%;box-sizing:border-box"/></div>
+      <div><label class="fl">xWP %</label><input type="number" id="ep-xwp" step="0.01" oninput="epAutoCalc()" style="width:100%;box-sizing:border-box"/></div>
+      <div><label class="fl">Edge %</label><input type="number" id="ep-ed" step="0.01" style="width:100%;box-sizing:border-box"/></div>
+      <div><label class="fl">Units (1u)</label><input type="number" id="ep-un" step="0.5" style="width:100%;box-sizing:border-box"/></div>
+      <div><label class="fl">Result</label>
+        <select id="ep-rs" style="width:100%;box-sizing:border-box">
+          <option value="Pending">Pending</option>
+          <option value="Win">Win</option>
+          <option value="Loss">Loss</option>
+        </select>
+      </div>
+    </div>
+    <div style="padding:0 16px 16px;display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn bg" onclick="closeEditPick()">Cancel</button>
+      <button class="btn bp" onclick="saveEditPick()">Save & Close</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
