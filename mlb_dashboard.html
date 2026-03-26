@@ -203,7 +203,7 @@ main { padding: 16px 20px; max-width: 1400px; margin: 0 auto; }
   object-fit: contain;
   opacity: 0.22;
   pointer-events: none;
-  filter: brightness(10) drop-shadow(0 0 2px rgba(0,0,0,.3));
+  filter: brightness(1.2) drop-shadow(0 0 2px rgba(0,0,0,.3));
 }
 
 .team-hdr-name {
@@ -1685,12 +1685,12 @@ function rGames(){
 
       <div class="gc-teams">
         <div class="gc-team-hdr away" style="background:${awInfo.primary}" onclick="toggleDrawer('${gid}')">
-          <img class="team-logo-bg" src="${awLogo}" alt="" onerror="this.src='${TEAM_LOGOS[g.away]||''}'" />
+          <img class="team-logo-bg" src="${awLogo}" alt="" width="62" height="62" onerror="this.style.display='none'" />
           <span class="team-hdr-name">${g.away}</span>
           <div class="win-pct-block"><div class="win-pct">${awPct}%</div><div class="win-implied">${fmtO(r.awMO)}</div></div>
         </div>
         <div class="gc-team-hdr home" style="background:${hwInfo.primary}" onclick="toggleDrawer('${gid}')">
-          <img class="team-logo-bg" src="${hwLogo}" alt="" onerror="this.src='${TEAM_LOGOS[g.home]||''}'" />
+          <img class="team-logo-bg" src="${hwLogo}" alt="" width="62" height="62" onerror="this.style.display='none'" />
           <span class="team-hdr-name">${g.home}</span>
           <div class="win-pct-block"><div class="win-pct">${hwPct}%</div><div class="win-implied">${fmtO(r.hwMO)}</div></div>
         </div>
