@@ -1755,9 +1755,9 @@ function rGames(){
     const awLogo = teamLogo(g.away);
     const hwLogo = teamLogo(g.home);
 
-    // Lineup rows — use Steamer600 WAR (s600) matching the sheet
+    // Lineup rows — display WAR/162
     const mkRows = (lu, team, side, gid) => (lu||[]).map((p,i)=>{
-      const w=n(p.s600||p.war);
+      const w=n(p.war162||p.war);
       const warCls=w>=5?'hi':'';
       const isSub = !!(g.lineupOverrides && g.lineupOverrides[`${side}_${i}`]?.manual);
       const rowStyle = isSub ? 'cursor:pointer;background:#fff3cd;border-left:3px solid #e6a817;' : 'cursor:pointer;';
