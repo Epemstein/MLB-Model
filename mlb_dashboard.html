@@ -2597,10 +2597,20 @@ function renderTeam(abr){
   const projW = PROJ_WINS_ALL[abr] || 81;
   const col = info.primary;
 
+  // Look up live record from standings data
+  let liveW = null, liveL = null, liveGP = 0;
+  if(_standingsData && _standingsData.length){
+    for(const div of _standingsData){
+      const tr = (div.teamRecords||[]).find(t => (MLB_ID_TO_ABR[t.team?.id]||t.team?.abbreviation) === abr);
+      if(tr){ liveW = tr.wins; liveL = tr.losses; liveGP = (tr.wins||0) + (tr.losses||0); break; }
+    }
+  }
+  const recordStr = liveW != null ? ` (${liveW}-${liveL})` : '';
+
   // Drive banner
   const banner = document.getElementById('tm-banner');
   banner.style.background = `linear-gradient(135deg, ${info.primary} 0%, ${info.secondary} 100%)`;
-  document.getElementById('tm-name').textContent = abr;
+  document.getElementById('tm-name').textContent = abr + recordStr;
   document.getElementById('tm-full').textContent = full;
   document.getElementById('tm-logo-bg').src = teamLogo(abr);
 
@@ -2608,7 +2618,7 @@ function renderTeam(abr){
   const hWAR = d.total_hitter_war || 0;
   const rotWAR = d.rotation_total || 0;
   const totalWAR = hWAR + rotWAR;
-  const gr = d.games_remaining;
+  const gr = liveGP > 0 ? (162 - liveGP) : d.games_remaining;
   const pillStyle = 'background:rgba(0,0,0,.25);border-radius:4px;padding:8px 12px;min-width:90px;text-align:center;';
   const lblStyle = 'font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.65);font-weight:600;margin-bottom:3px;';
   const valStyle = 'font-family:var(--mono);font-size:17px;font-weight:700;color:#fff;line-height:1;';
