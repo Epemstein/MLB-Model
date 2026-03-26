@@ -623,30 +623,33 @@ input[type=number] { -moz-appearance:textfield; }
 #odds-summary-table td, #odds-summary-table th { padding:3px 5px; }
 .odds-team-cell:hover { filter: brightness(0.92); transition: filter .1s; }
 
-/* Activity notification toast */
-#activity-toast {
+/* Activity notification toasts — stacked top right */
+#activity-toast-container {
   position: fixed;
   top: 16px;
   right: 16px;
   z-index: 99998;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  max-width: 280px;
+}
+.activity-toast-item {
   background: #fff;
   border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
   border-radius: 8px;
   padding: 10px 14px;
   box-shadow: 0 4px 16px rgba(0,0,0,.15);
   font-size: 12px;
-  max-width: 280px;
   opacity: 0;
-  transform: translateY(-8px);
+  transform: translateX(20px);
   transition: opacity .3s ease, transform .3s ease;
-  pointer-events: none;
 }
-#activity-toast.show {
-  opacity: 1;
-  transform: translateY(0);
-}
-#activity-toast .at-user { font-weight: 700; color: var(--accent); }
-#activity-toast .at-action { color: var(--text2); margin-top: 2px; }
+.activity-toast-item.show { opacity: 1; transform: translateX(0); }
+.activity-toast-item .at-user { font-weight: 700; color: var(--accent); }
+.activity-toast-item .at-action { color: var(--text2); margin-top: 2px; }
 
 </style>
 
@@ -1567,6 +1570,7 @@ async function fetchOdds(){
     document.getElementById('hdr-fetch').textContent = S.lastFetch;
     status.className='api-status ok';
     status.textContent=`✓ ${S.games.length} games loaded`;
+    logActivity(`Fetched lineups: ${S.games.length} games loaded`);
     rGames();
     toast(`${S.games.length} games loaded from Odds API!`);
   }catch(err){
@@ -2259,14 +2263,14 @@ function setMyOdds(gid, side, val){
   } else {
     return; // partial input like "-", don't re-render yet
   }
-  // Save to localStorage only — no Firebase during typing to avoid re-render
+  // Save to localStorage only — no Firebase during typing
   try{ localStorage.setItem('mlb26v3', JSON.stringify(S)); } catch(e){}
+  // Update edge display immediately on every keystroke
+  const calcs = S.games.map(g=>({g,r:modelCalc(g)})).filter(({r})=>r&&r.awWP!=null);
+  updGStatsEdgeOnly(calcs);
+  // Debounce Firebase save only
   clearTimeout(_myOddsTimer);
-  _myOddsTimer = setTimeout(() => {
-    const calcs = S.games.map(g=>({g,r:modelCalc(g)})).filter(({r})=>r&&r.awWP!=null);
-    updGStatsEdgeOnly(calcs);
-    saveToFirebase(); // Save to Firebase after debounce
-  }, 600);
+  _myOddsTimer = setTimeout(() => saveToFirebase(), 1000);
 }
 
 function updGStatsEdgeOnly(calcs){
@@ -2414,13 +2418,14 @@ function revertSwap(gid, side, slotIdx){
   const key = `${side}_${slotIdx}`;
   const ov = g.lineupOverrides[key];
   if(!ov?.manual) return;
+  const revertedName = ov.name;
+  const restoredName = ov.original || 'original';
   if(ov.original){
-    // Restore to original (BM/confirmed player)
     g.lineupOverrides[key] = {name: ov.original, s600: ov.origS600||0, war: ov.origWar||0};
   } else {
-    // No original stored — just delete the override
     delete g.lineupOverrides[key];
   }
+  logActivity(`Reverted ${g.away||gid} lineup: removed ${revertedName}, restored ${restoredName}`);
   save();
   rGames();
 }
@@ -3611,17 +3616,20 @@ async function deletePickFromFirebase(id){
 // ═══════════════════════════════════════════════
 // ACTIVITY LOG
 // ═══════════════════════════════════════════════
-let _activityToastTimer = null;
 function showActivityToast(name, action){
-  const el = document.getElementById('activity-toast');
-  const uEl = document.getElementById('at-user');
-  const aEl = document.getElementById('at-action');
-  if(!el) return;
-  uEl.textContent = (name||'?').split(' ')[0];
-  aEl.textContent = action;
-  el.classList.add('show');
-  clearTimeout(_activityToastTimer);
-  _activityToastTimer = setTimeout(() => el.classList.remove('show'), 4000);
+  const container = document.getElementById('activity-toast-container');
+  if(!container) return;
+  const item = document.createElement('div');
+  item.className = 'activity-toast-item';
+  item.innerHTML = `<div class="at-user">${(name||'?').split(' ')[0]}</div><div class="at-action">${action}</div>`;
+  container.appendChild(item);
+  // Trigger animation
+  requestAnimationFrame(() => requestAnimationFrame(() => item.classList.add('show')));
+  // Fade out and remove after 4s
+  setTimeout(() => {
+    item.classList.remove('show');
+    setTimeout(() => item.remove(), 350);
+  }, 4000);
 }
 
 function logActivity(action){
@@ -3723,6 +3731,6 @@ function loadActivityLog(){
   </div>
 </div>
 
-<div id="activity-toast"><div class="at-user" id="at-user"></div><div class="at-action" id="at-action"></div></div>
+<div id="activity-toast-container"></div>
 </body>
 </html>
