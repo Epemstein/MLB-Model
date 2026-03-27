@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>aMLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -4044,13 +4044,24 @@ async function fetchBoxscore(){
     const res = await fetch(`${PROXY_BASE}/mlb-api/game/${pk}/boxscore`);
     const data = await res.json();
     _gameModalData.boxscore = data;
-    // Extract decisions from boxscore (more reliable than schedule API)
+    // Extract decisions from boxscore — decisions only has {id,link}, look up name from players
     const bd = data.decisions || {};
     if(bd.winner || bd.loser || bd.save){
+      // Build a flat id->fullName map from all players in both teams
+      const allPlayers = {
+        ...((data.teams?.away?.players) || {}),
+        ...((data.teams?.home?.players) || {})
+      };
+      const nameById = id => {
+        if(!id) return '';
+        // players keyed as "ID{id}"
+        const pl = allPlayers['ID' + id] || Object.values(allPlayers).find(p => p.person?.id === id);
+        return pl?.person?.fullName || '';
+      };
       _gameModalData.decisions = {
-        winName: bd.winner?.fullName || '',
-        lossName: bd.loser?.fullName || '',
-        saveName: bd.save?.fullName || ''
+        winName:  nameById(bd.winner?.id)  || bd.winner?.fullName  || '',
+        lossName: nameById(bd.loser?.id)   || bd.loser?.fullName   || '',
+        saveName: nameById(bd.save?.id)    || bd.save?.fullName    || ''
       };
       // Re-render linescore strip now that we have decisions
       if(_gameModalData.linescore) renderLinescoreStrip(_gameModalData.linescore);
