@@ -651,6 +651,60 @@ input[type=number] { -moz-appearance:textfield; }
 .activity-toast-item .at-user { font-weight: 700; color: var(--accent); }
 .activity-toast-item .at-action { color: var(--text2); margin-top: 2px; }
 
+
+/* ── Game Result Modal ── */
+#game-modal-overlay {
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;
+  align-items:center;justify-content:center;
+}
+#game-modal {
+  background:#fff;border-radius:10px;width:min(820px,96vw);max-height:92vh;
+  overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,.3);
+}
+.gm-header {
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 20px;border-bottom:1px solid var(--border);
+}
+.gm-score-block {
+  display:flex;align-items:center;gap:16px;flex:1;justify-content:center;
+}
+.gm-team { text-align:center;min-width:80px; }
+.gm-team-logo { width:48px;height:48px;object-fit:contain; }
+.gm-team-abr { font-size:18px;font-weight:800;letter-spacing:.04em;margin-top:4px; }
+.gm-score { font-size:40px;font-weight:800;font-family:var(--mono);color:var(--text);padding:0 12px; }
+.gm-score-sep { font-size:28px;color:var(--muted);font-weight:300; }
+.gm-tabs { display:flex;border-bottom:1px solid var(--border);padding:0 20px;gap:0; }
+.gm-tab {
+  padding:10px 18px;font-size:12px;font-weight:600;cursor:pointer;
+  border-bottom:2px solid transparent;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.06em;
+}
+.gm-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+.gm-body { padding:20px; }
+/* Linescore table */
+.ls-table { width:100%;border-collapse:collapse;font-size:12px;font-family:var(--mono); }
+.ls-table th { background:#f5f5f5;padding:6px 8px;text-align:center;color:var(--muted);font-weight:600;font-size:10px; }
+.ls-table td { padding:6px 8px;text-align:center;border-bottom:1px solid #f0f0f0; }
+.ls-table td:first-child { text-align:left;font-weight:600;font-size:11px; }
+.ls-table .rhe { font-weight:700;background:#f9f9f9;border-left:2px solid var(--border); }
+/* Box score */
+.bs-section { margin-bottom:20px; }
+.bs-title { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border); }
+.bs-table { width:100%;border-collapse:collapse;font-size:11px; }
+.bs-table th { padding:4px 8px;text-align:right;color:var(--muted);font-size:10px;font-weight:600;border-bottom:1px solid var(--border); }
+.bs-table th:first-child { text-align:left; }
+.bs-table td { padding:4px 8px;text-align:right;border-bottom:1px solid #f8f8f8;font-family:var(--mono); }
+.bs-table td:first-child { text-align:left;font-family:var(--sans);font-weight:500; }
+.bs-table tr.totals td { font-weight:700;border-top:1px solid var(--border);background:#fafafa; }
+.bs-table tr.pitcher-win td:first-child::after { content:' W';color:var(--green);font-size:9px;font-weight:700; }
+.bs-table tr.pitcher-loss td:first-child::after { content:' L';color:var(--red);font-size:9px;font-weight:700; }
+.bs-table tr.pitcher-save td:first-child::after { content:' SV';color:var(--accent);font-size:9px;font-weight:700; }
+/* Bet info panel */
+.bet-info-grid { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
+.bet-info-item { background:#f8f9fa;border-radius:6px;padding:10px 14px; }
+.bet-info-label { font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-bottom:3px; }
+.bet-info-value { font-size:18px;font-weight:700;font-family:var(--mono);color:var(--text); }
+
 </style>
 
 <!-- Firebase -->
@@ -2141,7 +2195,7 @@ function rPicks(){
       : (run>=0?'+':'')+run.toFixed(2)+'u';
     const wc = isKelly ? (wonVal>0?'var(--green)':wonVal<0?'var(--red)':'var(--muted)')
                        : (p.uw>0?'var(--green)':p.uw<0?'var(--red)':'var(--muted)');
-    return `<tr>
+    return `<tr style="cursor:pointer;" onclick="openGameModal(${p.id})" title="Click to view game details">
       <td style="color:var(--muted);text-align:center">${S.picks.length - i}</td>
       <td style="text-align:center"><button class="btn bg" style="padding:2px 6px;font-size:9px;" onclick="openEditPick(${p.id})">✎</button></td>
       <td style="color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${p.tp||'—'}</td>
@@ -3788,6 +3842,279 @@ function loadActivityLog(){
       _lastActivityTs = Date.now();
     }, e => console.error('Activity listener error:', e));
 }
+
+// ═══════════════════════════════════════════════
+// GAME RESULT MODAL
+// ═══════════════════════════════════════════════
+let _gameModalPick = null;
+let _gameModalData = { linescore: null, boxscore: null };
+
+function closeGameModal(){
+  document.getElementById('game-modal-overlay').style.display = 'none';
+  _gameModalPick = null;
+  _gameModalData = { linescore: null, boxscore: null };
+}
+
+function switchGameTab(tab, btn){
+  document.querySelectorAll('.gm-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  ['bet','line','box'].forEach(t => {
+    document.getElementById('gm-tab-'+t).style.display = t===tab ? '' : 'none';
+  });
+  // Lazy load linescore/boxscore on first click
+  if(tab === 'line' && !_gameModalData.linescore) fetchLinescore();
+  if(tab === 'box' && !_gameModalData.boxscore) fetchBoxscore();
+}
+
+async function openGameModal(pickId){
+  const p = S.picks.find(pk => pk.id === pickId);
+  if(!p) return;
+  _gameModalPick = p;
+  _gameModalData = { linescore: null, boxscore: null };
+
+  // Reset tabs
+  document.querySelectorAll('.gm-tab').forEach((b,i) => b.classList.toggle('active', i===0));
+  ['line','box'].forEach(t => document.getElementById('gm-tab-'+t).style.display = 'none');
+  document.getElementById('gm-tab-bet').style.display = '';
+
+  // Populate header
+  const awAbr = p.ha === '@' ? p.tx : p.opp;
+  const hwAbr = p.ha === 'vs' ? p.tx : p.opp;
+  const awInfo = TEAM_INFO[awAbr] || {primary:'#333'};
+  const hwInfo = TEAM_INFO[hwAbr] || {primary:'#333'};
+
+  document.getElementById('gm-away-team').innerHTML = `
+    <img src="${teamLogo(awAbr)}" class="gm-team-logo" onerror="this.style.display='none'" />
+    <div class="gm-team-abr" style="color:${awInfo.primary}">${awAbr}</div>`;
+  document.getElementById('gm-home-team').innerHTML = `
+    <img src="${teamLogo(hwAbr)}" class="gm-team-logo" onerror="this.style.display='none'" />
+    <div class="gm-team-abr" style="color:${hwInfo.primary}">${hwAbr}</div>`;
+  document.getElementById('gm-status').textContent = p.dt || '';
+  document.getElementById('gm-venue').textContent = '';
+  document.getElementById('gm-away-score').textContent = '—';
+  document.getElementById('gm-home-score').textContent = '—';
+
+  // Render bet tab
+  renderBetTab(p);
+
+  // Show modal
+  document.getElementById('game-modal-overlay').style.display = 'flex';
+
+  // Fetch game pk in background for linescore/boxscore
+  fetchGamePk(p);
+}
+
+async function fetchGamePk(p){
+  try {
+    const teamAbr = p.ha === '@' ? p.tx : p.opp; // use pick team to find game
+    const teamId = MLB_TEAM_IDS[teamAbr];
+    if(!teamId || !p.dt) return;
+    // Convert MM/DD/YYYY to YYYY-MM-DD
+    const parts = p.dt.split('/');
+    const dateStr = parts.length === 3 ? `${parts[2]}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}` : p.dt;
+    const url = `${PROXY_BASE}/mlb-api/schedule?sportId=1&date=${dateStr}&teamId=${teamId}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const games = data.dates?.[0]?.games || [];
+    if(!games.length) return;
+    const gamePk = games[0].gamePk;
+    _gameModalData.gamePk = gamePk;
+
+    // Update score if final
+    const g = games[0];
+    const awScore = g.teams?.away?.score;
+    const hwScore = g.teams?.home?.score;
+    if(awScore != null){
+      document.getElementById('gm-away-score').textContent = awScore;
+      document.getElementById('gm-home-score').textContent = hwScore;
+    }
+    document.getElementById('gm-status').textContent = `${p.dt} · ${g.status?.detailedState || ''}`;
+    document.getElementById('gm-venue').textContent = g.venue?.name || '';
+  } catch(e){ console.error('fetchGamePk error:', e); }
+}
+
+async function fetchLinescore(){
+  const pk = _gameModalData.gamePk;
+  const tab = document.getElementById('gm-tab-line');
+  if(!pk){ tab.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center;">Game data not available</div>'; return; }
+  tab.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center;">Loading…</div>';
+  try {
+    const res = await fetch(`${PROXY_BASE}/mlb-api/game/${pk}/linescore`);
+    const data = await res.json();
+    _gameModalData.linescore = data;
+    renderLinescore(data);
+  } catch(e){ tab.innerHTML = '<div style="color:var(--red);padding:20px;">Failed to load linescore</div>'; }
+}
+
+async function fetchBoxscore(){
+  const pk = _gameModalData.gamePk;
+  const tab = document.getElementById('gm-tab-box');
+  if(!pk){ tab.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center;">Game data not available</div>'; return; }
+  tab.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center;">Loading…</div>';
+  try {
+    const res = await fetch(`${PROXY_BASE}/mlb-api/game/${pk}/boxscore`);
+    const data = await res.json();
+    _gameModalData.boxscore = data;
+    renderBoxscore(data);
+  } catch(e){ tab.innerHTML = '<div style="color:var(--red);padding:20px;">Failed to load box score</div>'; }
+}
+
+function renderBetTab(p){
+  const risk = p.un || 1;
+  const won = p.uw != null ? p.uw : 0;
+  const edge = p.ed != null ? p.ed : 0;
+  const kuRisk = p.ku ? (p.ku * (Math.abs(p.od) > 100 ? Math.abs(p.od)/100 : 1)).toFixed(2) : '—';
+  const wc = won > 0 ? 'var(--green)' : won < 0 ? 'var(--red)' : 'var(--muted)';
+  const ec = edge > 0 ? 'var(--green)' : edge < 0 ? 'var(--red)' : 'var(--muted)';
+  document.getElementById('gm-tab-bet').innerHTML = `
+    <div style="margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px;">${p.tx} ${p.ha||'vs'} ${p.opp}</div>
+      <div style="font-size:11px;color:var(--muted);">${p.gt||''} · ${p.tp||''}</div>
+    </div>
+    <div class="bet-info-grid">
+      <div class="bet-info-item">
+        <div class="bet-info-label">Odds</div>
+        <div class="bet-info-value">${p.od>0?'+':''}${p.od}</div>
+      </div>
+      <div class="bet-info-item">
+        <div class="bet-info-label">Edge</div>
+        <div class="bet-info-value" style="color:${ec}">${edge>=0?'+':''}${edge.toFixed(1)}%</div>
+      </div>
+      <div class="bet-info-item">
+        <div class="bet-info-label">xWP</div>
+        <div class="bet-info-value">${p.xwp?p.xwp.toFixed(1)+'%':'—'}</div>
+      </div>
+      <div class="bet-info-item">
+        <div class="bet-info-label">Result</div>
+        <div class="bet-info-value" style="color:${p.rs==='Win'?'var(--green)':p.rs==='Loss'?'var(--red)':'var(--muted)'}">${p.rs}</div>
+      </div>
+      <div class="bet-info-item">
+        <div class="bet-info-label">Risk (Flat)</div>
+        <div class="bet-info-value">${risk.toFixed(2)}u</div>
+      </div>
+      <div class="bet-info-item">
+        <div class="bet-info-label">Won (Flat)</div>
+        <div class="bet-info-value" style="color:${wc}">${p.rs==='Pending'?'—':(won>=0?'+':'')+won.toFixed(2)+'u'}</div>
+      </div>
+      <div class="bet-info-item">
+        <div class="bet-info-label">Kelly %</div>
+        <div class="bet-info-value">${p.ku?p.ku.toFixed(2)+'%':'—'}</div>
+      </div>
+      <div class="bet-info-item">
+        <div class="bet-info-label">Kelly Won</div>
+        <div class="bet-info-value" style="color:${(p.kuw||0)>0?'var(--green)':(p.kuw||0)<0?'var(--red)':'var(--muted)'}">${p.rs==='Pending'?'—':((p.kuw||0)>=0?'+':'')+((p.kuw||0)).toFixed(2)+'u'}</div>
+      </div>
+    </div>`;
+}
+
+function renderLinescore(data){
+  const innings = data.innings || [];
+  const away = data.teams?.away;
+  const home = data.teams?.home;
+  const awAbr = _gameModalPick?.ha === '@' ? _gameModalPick.tx : _gameModalPick.opp;
+  const hwAbr = _gameModalPick?.ha === 'vs' ? _gameModalPick.tx : _gameModalPick.opp;
+
+  const inningNums = innings.map((_,i) => `<th>${i+1}</th>`).join('');
+  const awInnings = innings.map(i => `<td>${i.away?.runs ?? '—'}</td>`).join('');
+  const hwInnings = innings.map(i => `<td>${i.home?.runs ?? '—'}</td>`).join('');
+
+  document.getElementById('gm-tab-line').innerHTML = `
+    <div style="overflow-x:auto;">
+      <table class="ls-table">
+        <thead><tr>
+          <th style="text-align:left;width:60px">Team</th>
+          ${inningNums}
+          <th class="rhe">R</th><th class="rhe">H</th><th class="rhe">E</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td>${awAbr}</td>${awInnings}
+            <td class="rhe">${away?.runs??'—'}</td>
+            <td class="rhe">${away?.hits??'—'}</td>
+            <td class="rhe">${away?.errors??'—'}</td>
+          </tr>
+          <tr>
+            <td>${hwAbr}</td>${hwInnings}
+            <td class="rhe">${home?.runs??'—'}</td>
+            <td class="rhe">${home?.hits??'—'}</td>
+            <td class="rhe">${home?.errors??'—'}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function renderBoxscore(data){
+  const teams = data.teams || {};
+  const awAbr = _gameModalPick?.ha === '@' ? _gameModalPick.tx : _gameModalPick.opp;
+  const hwAbr = _gameModalPick?.ha === 'vs' ? _gameModalPick.tx : _gameModalPick.opp;
+
+  function battingTable(teamData, abr){
+    const players = Object.values(teamData.players || {})
+      .filter(p => p.stats?.batting && p.battingOrder)
+      .sort((a,b) => (a.battingOrder||999) - (b.battingOrder||999));
+    const rows = players.map(p => {
+      const b = p.stats.batting;
+      const pos = p.position?.abbreviation || '';
+      return `<tr>
+        <td>${p.person?.fullName||'?'} <span style="color:var(--muted);font-size:10px">${pos}</span></td>
+        <td>${b.atBats??0}</td><td>${b.runs??0}</td><td>${b.hits??0}</td>
+        <td>${b.rbi??0}</td><td>${b.baseOnBalls??0}</td><td>${b.strikeOuts??0}</td>
+        <td>${b.avg||'.000'}</td>
+      </tr>`;
+    }).join('');
+    const tot = teamData.teamStats?.batting || {};
+    return `
+      <div class="bs-section">
+        <div class="bs-title">${abr} Batting</div>
+        <table class="bs-table">
+          <thead><tr><th>Player</th><th>AB</th><th>R</th><th>H</th><th>RBI</th><th>BB</th><th>SO</th><th>AVG</th></tr></thead>
+          <tbody>
+            ${rows}
+            <tr class="totals"><td>Totals</td><td>${tot.atBats??0}</td><td>${tot.runs??0}</td><td>${tot.hits??0}</td><td>${tot.rbi??0}</td><td>${tot.baseOnBalls??0}</td><td>${tot.strikeOuts??0}</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  function pitchingTable(teamData, abr){
+    const info = data.info || [];
+    const winInfo = info.find(i => i.label === 'WP');
+    const lossInfo = info.find(i => i.label === 'LP');
+    const saveInfo = info.find(i => i.label === 'Sv');
+    const pitchers = Object.values(teamData.players || {})
+      .filter(p => p.stats?.pitching && p.stats.pitching.inningsPitched)
+      .sort((a,b) => parseFloat(a.stats.pitching.inningsPitched||0) < parseFloat(b.stats.pitching.inningsPitched||0) ? 1 : -1);
+    const rows = pitchers.map(p => {
+      const pt = p.stats.pitching;
+      const name = p.person?.fullName||'?';
+      let cls = '';
+      if(winInfo?.value?.includes(name.split(' ').pop())) cls = 'pitcher-win';
+      else if(lossInfo?.value?.includes(name.split(' ').pop())) cls = 'pitcher-loss';
+      else if(saveInfo?.value?.includes(name.split(' ').pop())) cls = 'pitcher-save';
+      return `<tr class="${cls}">
+        <td>${name}</td>
+        <td>${pt.inningsPitched||0}</td><td>${pt.hits??0}</td><td>${pt.runs??0}</td>
+        <td>${pt.earnedRuns??0}</td><td>${pt.baseOnBalls??0}</td><td>${pt.strikeOuts??0}</td>
+        <td>${pt.era||'—'}</td>
+      </tr>`;
+    }).join('');
+    return `
+      <div class="bs-section">
+        <div class="bs-title">${abr} Pitching</div>
+        <table class="bs-table">
+          <thead><tr><th>Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>SO</th><th>ERA</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  document.getElementById('gm-tab-box').innerHTML =
+    battingTable(teams.away||{}, awAbr) +
+    pitchingTable(teams.away||{}, awAbr) +
+    battingTable(teams.home||{}, hwAbr) +
+    pitchingTable(teams.home||{}, hwAbr);
+}
 </script>
 
 <!-- ══ EDIT PICK MODAL ══ -->
@@ -3829,5 +4156,38 @@ function loadActivityLog(){
 </div>
 
 <div id="activity-toast-container"></div>
+
+<!-- ══ GAME RESULT MODAL ══ -->
+<div id="game-modal-overlay" onclick="if(event.target===this)closeGameModal()">
+  <div id="game-modal">
+    <div class="gm-header">
+      <div class="gm-score-block" id="gm-score-block">
+        <div class="gm-team" id="gm-away-team"></div>
+        <div>
+          <div style="text-align:center;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;" id="gm-status"></div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div class="gm-score" id="gm-away-score">—</div>
+            <div class="gm-score-sep">-</div>
+            <div class="gm-score" id="gm-home-score">—</div>
+          </div>
+          <div style="text-align:center;font-size:10px;color:var(--muted);margin-top:4px;" id="gm-venue"></div>
+        </div>
+        <div class="gm-team" id="gm-home-team"></div>
+      </div>
+      <span onclick="closeGameModal()" style="cursor:pointer;color:var(--muted);font-size:22px;line-height:1;margin-left:16px;">×</span>
+    </div>
+    <div class="gm-tabs">
+      <div class="gm-tab active" onclick="switchGameTab('bet',this)">Your Bet</div>
+      <div class="gm-tab" onclick="switchGameTab('line',this)">Linescore</div>
+      <div class="gm-tab" onclick="switchGameTab('box',this)">Box Score</div>
+    </div>
+    <div class="gm-body">
+      <div id="gm-tab-bet"></div>
+      <div id="gm-tab-line" style="display:none"></div>
+      <div id="gm-tab-box" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
