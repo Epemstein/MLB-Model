@@ -3245,8 +3245,8 @@ async function fetchProjections(force=false){
     console.log('Fetching projections from', base + '/fg-proj/');
 
     const [batRes, pitRes] = await Promise.all([
-      fetch(`${base}/fg-proj/?type=steamer&stats=bat&pos=all&team=0&players=0&lg=all`),
-      fetch(`${base}/fg-proj/?type=steamer&stats=pit&pos=all&team=0&players=0&lg=all`),
+      fetch(`${base}/fg-proj/?type=steamerr&stats=bat&pos=all&team=0&players=0&lg=all`),
+      fetch(`${base}/fg-proj/?type=steamerr&stats=pit&pos=all&team=0&players=0&lg=all`),
     ]);
 
     console.log('Bat response:', batRes.status, 'Pit response:', pitRes.status);
