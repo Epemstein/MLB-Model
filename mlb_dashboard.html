@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>vMLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -756,6 +756,7 @@ input[type=number] { -moz-appearance:textfield; }
 <nav>
   <button class="active" onclick="showPanel('games',this)">⚡ Games</button>
   <button onclick="showPanel('picks',this)">📋 Daily Picks</button>
+  <button onclick="showPanel('kelly-tracker',this)">💵 Kelly</button>
   <button onclick="showPanel('perf',this)">📈 Performance</button>
   <button onclick="showPanel('proj-h',this)">⚾ Hitters</button>
   <button onclick="showPanel('proj-p',this)">🎯 Pitchers</button>
@@ -872,6 +873,11 @@ input[type=number] { -moz-appearance:textfield; }
     </div>
     <div class="sw"><table class="dt"><thead><tr><th style="width:42px">Bet No.</th><th style="width:28px"></th><th style="width:90px;white-space:nowrap">Placed</th><th style="width:70px">Date</th><th style="width:60px">Pick</th><th style="width:80px">Opp</th><th style="width:90px">Game Time</th><th style="width:60px;text-align:right">Odds</th><th style="width:45px;text-align:right">xWP</th><th style="width:55px;text-align:right">Edge</th><th style="width:55px;text-align:right" id="th-bet">Bet</th><th style="width:60px">Result</th><th style="width:65px;text-align:right" id="th-won">Won</th><th style="width:75px;text-align:right" id="th-run">Running</th><th style="width:28px"></th></tr></thead><tbody id="pb"><tr><td colspan="14" class="nd">No picks yet.</td></tr></tbody></table></div>
   </div>
+</div>
+
+<!-- ══ KELLY TRACKER ══ -->
+<div id="panel-kelly-tracker" class="panel">
+  <div id="kelly-tracker-body"></div>
 </div>
 
 <!-- ══ PERFORMANCE ══ -->
@@ -2229,6 +2235,7 @@ function addPick(){
   logActivity(`Logged pick: ${newPick.tx} ${newPick.od>0?'+':''}${newPick.od} (${newPick.rs})`, newPick.tx);
   localStorage.setItem('mlb26v3',JSON.stringify(S));
   rPicks();rPerf();
+  if(document.getElementById("panel-kelly-tracker").classList.contains("active")) renderKellyTracker();
   ['p-tx','p-opp','p-od','p-xwp','p-ed','p-gt'].forEach(id=>document.getElementById(id).value='');
   updatePickLogo();
   document.getElementById('p-ha').textContent='vs';
@@ -3129,6 +3136,7 @@ function showPanel(name,btn){
   document.getElementById('panel-'+name).classList.add('active');
   if(btn)btn.classList.add('active');
   if(name==='games')rGames();
+  if(name==='kelly-tracker'){renderKellyTracker();}
   if(name==='perf')rCharts();
   if(name==='teams'){initTeamBtns();renderTeam(currentTeam);}
   if(name==='proj-h')rProjH();
@@ -3750,6 +3758,152 @@ function renderBaseline(){
     <td style="padding:6px 10px;text-align:right;">+0.00</td>
     <td style="padding:6px 10px;text-align:right;color:var(--accent);">81.0</td>
   </tr>`;
+}
+
+function renderKellyTracker(){
+  const body = document.getElementById('kelly-tracker-body');
+  if(!body) return;
+
+  // Group all picks by date (YYYY-MM-DD), sorted newest first
+  const allPicks = [...S.picks].sort((a,b) => {
+    const ad = a.dt.includes('/') ? dateToYMD(a.dt) : a.dt;
+    const bd = b.dt.includes('/') ? dateToYMD(b.dt) : b.dt;
+    return bd.localeCompare(ad);
+  });
+
+  // Get unique dates
+  const dates = [...new Set(allPicks.map(p => p.dt.includes('/') ? dateToYMD(p.dt) : p.dt))];
+
+  if(!dates.length){
+    body.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);">No picks logged yet.</div>';
+    return;
+  }
+
+  const unit = S.br.unit || 100;
+  let html = '';
+
+  dates.forEach(ymd => {
+    const mdy = ymdToMDY(ymd);
+    const dayPicks = allPicks.filter(p => (p.dt.includes('/') ? dateToYMD(p.dt) : p.dt) === ymd);
+    const startBR = getDailyStartBR(ymd);
+    const anchor = startBR || S.br.start || 10000;
+
+    // Day summary calcs — only settled picks for P&L
+    const settled = dayPicks.filter(p => p.rs !== 'Pending');
+    const pending = dayPicks.filter(p => p.rs === 'Pending');
+
+    // At risk = sum of actual dollars risked (actualDollar if set, else kelly rec, else units×unit)
+    const atRisk = dayPicks.reduce((s, p) => {
+      const actual = (p._kellyActual != null && p._kellyActual !== '') ? parseFloat(p._kellyActual) : null;
+      if(actual !== null) return s + actual;
+      const recDollar = p.ku ? Math.min(p.ku, S.br.maxPct||3) / 100 * anchor : p.un * unit;
+      return s + recDollar;
+    }, 0);
+
+    // P&L from settled only, using actual dollar if set
+    let pnl = 0;
+    settled.forEach(p => {
+      const actual = (p._kellyActual != null && p._kellyActual !== '') ? parseFloat(p._kellyActual) : null;
+      const riskDollar = actual !== null ? actual : (p.ku ? Math.min(p.ku, S.br.maxPct||3) / 100 * anchor : p.un * unit);
+      // kuw is in units of ku% of bankroll — convert to dollars
+      if(p.ku && anchor){
+        const kuDollar = p.ku / 100 * anchor;
+        const ratio = riskDollar / (kuDollar || 1);
+        pnl += (p.kuw || 0) * anchor / 100 * ratio;
+      } else {
+        pnl += (p.uw || 0) * unit;
+      }
+    });
+
+    const closingBR = anchor + pnl;
+    const startStr = startBR ? '$' + Math.round(anchor).toLocaleString() : '<span style="color:var(--red);font-size:10px;">not confirmed</span>';
+    const pnlColor = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+    const pnlStr = (pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toFixed(0);
+
+    // Pick rows
+    const pickRows = dayPicks.map(p => {
+      const recKuPct = p.ku ? Math.min(p.ku * (S.br.kelly||0.5), S.br.maxPct||3) : 0;
+      const recDollar = recKuPct > 0 ? (recKuPct / 100 * anchor) : (p.un * unit);
+      const actualVal = (p._kellyActual != null && p._kellyActual !== '') ? parseFloat(p._kellyActual) : '';
+
+      // P&L for this pick using actual dollar
+      let pickPnl = '—';
+      if(p.rs !== 'Pending'){
+        const riskD = actualVal !== '' ? actualVal : recDollar;
+        let wonD;
+        if(p.od >= 0){
+          wonD = p.rs === 'Win' ? riskD * (p.od/100) : -riskD;
+        } else {
+          wonD = p.rs === 'Win' ? riskD * (100/Math.abs(p.od)) : -riskD;
+        }
+        pickPnl = (wonD >= 0 ? '+$' : '-$') + Math.abs(wonD).toFixed(0);
+      }
+      const pnlC = p.rs === 'Win' ? 'var(--green)' : p.rs === 'Loss' ? 'var(--red)' : 'var(--muted)';
+      const rsColor = p.rs === 'Win' ? 'var(--green)' : p.rs === 'Loss' ? 'var(--red)' : 'var(--accent)';
+      const odStr = (p.od > 0 ? '+' : '') + p.od;
+
+      return `<tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:6px 8px;font-weight:600;">${p.tx || '—'}</td>
+        <td style="padding:6px 8px;color:var(--muted);font-size:11px;">${p.ha||'vs'} ${p.opp||'—'}</td>
+        <td style="padding:6px 8px;text-align:right;">${odStr}</td>
+        <td style="padding:6px 8px;text-align:right;color:${p.ed>0?'var(--green)':'var(--red)'};">${p.ed>=0?'+':''}${(p.ed||0).toFixed(1)}%</td>
+        <td style="padding:6px 8px;text-align:right;color:var(--muted);">${recKuPct > 0 ? recKuPct.toFixed(2)+'%' : '—'}</td>
+        <td style="padding:6px 8px;text-align:right;color:var(--accent);font-weight:600;">${recDollar > 0 ? '$'+recDollar.toFixed(0) : '—'}</td>
+        <td style="padding:6px 8px;text-align:center;">
+          <input type="number" value="${actualVal}" placeholder="${recDollar > 0 ? recDollar.toFixed(0) : ''}"
+            style="width:72px;padding:3px 6px;border:1px solid var(--border);border-radius:3px;background:var(--bg2);color:var(--fg);font-size:12px;text-align:right;"
+            onchange="saveKellyActual(${p.id}, this.value)" />
+        </td>
+        <td style="padding:6px 8px;text-align:center;color:${rsColor};font-size:11px;font-weight:600;">${p.rs}</td>
+        <td style="padding:6px 8px;text-align:right;font-weight:600;color:${pnlC};">${pickPnl}</td>
+      </tr>`;
+    }).join('');
+
+    html += `
+    <div style="margin-bottom:20px;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+      <!-- Day header summary -->
+      <div style="background:var(--bg2);padding:10px 16px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;border-bottom:2px solid var(--border);">
+        <div style="font-weight:700;font-size:14px;color:var(--accent);min-width:100px;">${ymd}</div>
+        <div style="display:flex;gap:24px;flex:1;flex-wrap:wrap;">
+          <div><div style="font-size:10px;color:var(--muted);">Start</div><div style="font-weight:700;font-size:13px;">${startStr}</div></div>
+          <div><div style="font-size:10px;color:var(--muted);">At Risk</div><div style="font-weight:700;font-size:13px;">$${atRisk.toFixed(0)}${pending.length ? ' <span style="font-size:10px;color:var(--accent);">('+pending.length+' pend)</span>' : ''}</div></div>
+          <div><div style="font-size:10px;color:var(--muted);">P&L</div><div style="font-weight:700;font-size:13px;color:${pnlColor};">${pnlStr}</div></div>
+          <div><div style="font-size:10px;color:var(--muted);">Close</div><div style="font-weight:700;font-size:13px;color:${pnlColor};">$${Math.round(closingBR).toLocaleString()}</div></div>
+        </div>
+        ${!startBR ? `<button onclick="showDailyBRBanner()" style="padding:4px 10px;font-size:10px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;">Set Start</button>` : ''}
+      </div>
+      <!-- Pick rows -->
+      <table style="width:100%;border-collapse:collapse;font-size:12px;font-family:var(--mono);">
+        <thead>
+          <tr style="background:var(--bg2);border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;">
+            <th style="padding:5px 8px;text-align:left;">Pick</th>
+            <th style="padding:5px 8px;text-align:left;">vs</th>
+            <th style="padding:5px 8px;text-align:right;">Odds</th>
+            <th style="padding:5px 8px;text-align:right;">Edge</th>
+            <th style="padding:5px 8px;text-align:right;">Kelly %</th>
+            <th style="padding:5px 8px;text-align:right;">Rec $</th>
+            <th style="padding:5px 8px;text-align:center;">Actual $</th>
+            <th style="padding:5px 8px;text-align:center;">Result</th>
+            <th style="padding:5px 8px;text-align:right;">P&L</th>
+          </tr>
+        </thead>
+        <tbody>${pickRows}</tbody>
+      </table>
+    </div>`;
+  });
+
+  body.innerHTML = html;
+}
+
+function saveKellyActual(pickId, value){
+  const p = S.picks.find(p => p.id === pickId);
+  if(!p) return;
+  p._kellyActual = value === '' ? null : parseFloat(value);
+  savePickToFirebase(p);
+  localStorage.setItem('mlb26v3', JSON.stringify(S));
+  // Re-render to update P&L immediately
+  renderKellyTracker();
+  rPerf();
 }
 
 function renderStandings(){
