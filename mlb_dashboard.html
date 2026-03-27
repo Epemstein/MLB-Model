@@ -4323,15 +4323,15 @@ function renderScoring(data){
     return;
   }
 
-  let awScore = 0, hwScore = 0;
   const rows = scoring.map(pl => {
     const inn = pl.about?.inning || '?';
     const side = pl.about?.halfInning === 'top' ? 'top' : 'bot';
     const teamAbr = side === 'top' ? awAbr : hwAbr;
-    const rbi = pl.result?.rbi || 0;
-    if(side === 'top') awScore += rbi; else hwScore += rbi;
     const desc = pl.result?.description || '';
-    const score = `${awScore}-${hwScore}`;
+    // Use actual score from API — avoids RBI miscounts (errors, wild pitches, etc.)
+    const awSc = pl.result?.awayScore ?? pl.about?.awayScore ?? '?';
+    const hwSc = pl.result?.homeScore ?? pl.about?.homeScore ?? '?';
+    const score = awSc + '-' + hwSc;
     const color = teamAbr === p?.tx ? 'var(--accent)' : 'var(--text2)';
     return `<tr style="border-bottom:1px solid #f0f0f0;">
       <td style="padding:10px 10px;color:var(--muted);white-space:nowrap;font-size:11px;font-family:var(--mono);font-weight:600;">${side==='top'?'▲':'▼'}${inn}</td>
