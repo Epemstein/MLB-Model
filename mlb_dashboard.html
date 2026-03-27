@@ -769,6 +769,16 @@ input[type=number] { -moz-appearance:textfield; }
 
 <main>
 
+<!-- ══ DAILY BR BANNER ══ -->
+<div id="daily-br-banner" style="display:none;position:fixed;top:48px;left:0;right:0;z-index:9000;background:linear-gradient(90deg,#1a3a5c,#2c5282);padding:10px 20px;display:none;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.3);">
+  <span style="font-size:13px;color:#fff;font-weight:600;">📅 Today's starting bankroll:</span>
+  <span id="daily-br-calc" style="font-size:15px;color:var(--accent);font-weight:700;">$10,000</span>
+  <input type="number" id="daily-br-input" style="width:110px;padding:4px 8px;border-radius:4px;border:1px solid var(--accent);background:#1a3a5c;color:#fff;font-size:13px;font-weight:600;" />
+  <button onclick="confirmDailyBR()" style="padding:5px 14px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:700;font-size:12px;">✓ Confirm</button>
+  <button onclick="dismissDailyBR()" style="padding:5px 10px;background:transparent;color:#aaa;border:1px solid #444;border-radius:4px;cursor:pointer;font-size:11px;">Later</button>
+  <span style="margin-left:auto;font-size:11px;color:#aaa;" id="daily-br-note">Based on yesterday's closing balance</span>
+</div>
+
 <!-- ══ GAMES ══ -->
 <div id="panel-games" class="panel active">
 
@@ -843,6 +853,11 @@ input[type=number] { -moz-appearance:textfield; }
       <div class="fg"><label class="fl">xWP %</label><input type="number" id="p-xwp" placeholder="52.9" step="0.01" oninput="autoCalcEdge()" readonly style="background:#f8f8f8;color:var(--muted)"/></div>
       <div class="fg"><label class="fl">Edge %</label><input type="number" id="p-ed" placeholder="auto" step="0.01" readonly style="background:#f8f8f8;color:var(--muted)"/></div>
       <div class="fg"><label class="fl">Risk (u)</label><input type="number" id="p-un" value="1" step="0.5"/></div>
+      <div class="fg" style="background:rgba(0,200,240,.06);border:1px solid var(--accent);border-radius:4px;padding:6px 10px;">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:2px;">Kelly Rec ($)</div>
+        <div id="p-kelly-rec" style="font-size:14px;font-weight:700;color:var(--accent);">—</div>
+        <div id="p-kelly-pct" style="font-size:10px;color:var(--muted);">0.00% of today's bankroll</div>
+      </div>
       <div class="fg"><label class="fl">Result</label>
         <select id="p-rs"><option value="Pending">Pending</option><option value="Win">Win</option><option value="Loss">Loss</option></select>
       </div>
@@ -947,10 +962,27 @@ input[type=number] { -moz-appearance:textfield; }
     </div>
     <div class="card">
       <div class="ct">Status</div>
-      <div class="sr" style="margin-bottom:0">
+      <div class="sr" style="margin-bottom:8px">
         <div class="st cg"><div class="sl">Balance</div><div class="sv g" id="br-c">$10,000</div><div class="ss" id="br-p">+0.00%</div></div>
         <div class="st ca"><div class="sl">Wagered</div><div class="sv" id="br-w">$0</div></div>
         <div class="st cy"><div class="sl">P/L</div><div class="sv y" id="br-pnl">$0</div></div>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:2px;">Today's Start</div>
+          <div id="br-today-start" style="font-size:14px;font-weight:700;color:var(--accent);">—</div>
+          <div id="br-today-confirmed" style="font-size:10px;color:var(--muted);">not confirmed</div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:2px;">Tomorrow's Start</div>
+          <div id="br-tomorrow-start" style="font-size:14px;font-weight:700;">—</div>
+          <div style="font-size:10px;color:var(--muted);">projected</div>
+        </div>
+      </div>
+      <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px;">Kelly $ Anchor (today's start)</div>
+        <div id="br-kelly-anchor" style="font-size:13px;font-weight:600;color:var(--accent);">—</div>
+        <button onclick="showDailyBRBanner()" style="margin-top:6px;padding:4px 10px;font-size:10px;background:transparent;border:1px solid var(--border2);color:var(--muted);border-radius:4px;cursor:pointer;">⟳ Re-confirm today's start</button>
       </div>
     </div>
   </div>
@@ -1260,7 +1292,7 @@ const PROXY_BASE = isLocal ? `${window.location.protocol}//${window.location.hos
 // ═══════════════════════════════════════════════
 // STORE
 // ═══════════════════════════════════════════════
-const S={games:[],spOverrides:{},ipOverrides:{},picks:[],br:{start:10000,unit:100,kelly:0.5,maxPct:3},apiKey:'',lastFetch:null};
+const S={games:[],spOverrides:{},ipOverrides:{},picks:[],br:{start:10000,unit:100,kelly:0.5,maxPct:3},apiKey:'',lastFetch:null,_dailyBR:{}};
 function save(){
   // Save everything EXCEPT games to localStorage — games live in Firestore by date
   try{
@@ -1279,6 +1311,7 @@ function load(){
     if(d.br)S.br={...S.br,...d.br};
     if(d.apiKey)S.apiKey=d.apiKey;
     if(d.lastFetch)S.lastFetch=d.lastFetch;
+    if(d._dailyBR)S._dailyBR={...S._dailyBR,...d._dailyBR};
   }catch(e){}
 }
 
@@ -2170,6 +2203,7 @@ function autoCalcEdge(){
       document.getElementById('p-ed').value = edge.toFixed(2);
     }
   }
+  updateKellyRec();
 }
 function addPick(){
   const dt  = document.getElementById('p-dt').value;
@@ -2240,8 +2274,12 @@ function rPicks(){
     const rc = (_pickView==='kelly'?krun:run)>=0?'var(--green)':'var(--red)';
     const isKelly = _pickView === 'kelly';
     const start = S.br.start || 10000;
-    // Flat: units bet/won/running
-    // Kelly: % of bankroll bet, $ won, $ running
+    // Use confirmed daily start bankroll for Kelly $ if available, else fall back
+    const kellyAnchor = getTodayStartBR() || start;
+    // Kelly $ recommended for this pick's date
+    const pickDateStart = getDailyStartBR(p.dt) || kellyAnchor;
+    const kellyDollar = p.ku ? (p.ku / 100) * pickDateStart : 0;
+    const kellyRecStr = p.ku && p.ku > 0 ? '$' + kellyDollar.toFixed(0) : '—';
     const betStr  = isKelly ? (p.ku?p.ku.toFixed(2)+'%':'—') : p.un+'u';
     const wonVal  = isKelly ? (p.kuw||0)*start/100 : p.uw;
     const runVal  = isKelly ? krun*start/100 : run;
@@ -2264,6 +2302,7 @@ function rPicks(){
       <td style="text-align:right">${p.od>0?'+':''}${p.od}</td>
       <td style="color:var(--muted);text-align:right">${p.xwp?p.xwp.toFixed(1)+'%':'—'}</td>
       <td style="color:${p.ed>0?'var(--green)':p.ed<0?'var(--red)':'var(--muted)'};text-align:right">${p.ed>=0?'+':''}${p.ed.toFixed(1)}%</td>
+      <td style="text-align:right;color:var(--accent);font-weight:600;">${kellyRecStr}</td>
       <td style="text-align:right">${betStr}</td>
       <td><select style="background:transparent;border:1px solid var(--border);color:${p.rs==='Win'?'var(--green)':p.rs==='Loss'?'var(--red)':'var(--accent)'};font-size:10px;padding:2px 4px;" onchange="updPick(${p.id},this.value)">
         <option value="Pending" ${p.rs==='Pending'?'selected':''}>Pending</option>
@@ -2298,6 +2337,7 @@ function rPerf(){
   document.getElementById('br-w').textContent='$'+(risk*unit).toLocaleString('en-US',{maximumFractionDigits:0});
   document.getElementById('br-pnl').textContent=(pnl>=0?'+$':'-$')+Math.abs(pnl).toLocaleString('en-US',{maximumFractionDigits:0});
   document.getElementById('br-pnl').style.color=pnl>=0?'var(--green)':'var(--red)';
+  updateDailyBRStatusPanel();
 }
 
 // ═══════════════════════════════════════════════
@@ -2669,7 +2709,14 @@ function onDateChange(){
   S.games = []; // Clear immediately while we load the new date
   rGames();
   subscribeToGamesDate(date); // Load from Firestore — no API fetch
-  // fetchMLBGames() is NOT called here — user fetches manually if needed
+  // Load daily BR for new date from Firestore if not already loaded
+  if(!S._dailyBR[date]){
+    db.collection('bankroll').doc('daily_' + date).get().then(snap => {
+      if(snap.exists){ S._dailyBR[date] = snap.data(); updateDailyBRStatusPanel(); }
+    }).catch(()=>{});
+  }
+  checkDailyBROnLoad();
+  updateDailyBRStatusPanel();
 }
 
 function shiftDate(days){
@@ -2862,6 +2909,187 @@ function rProjP(){
 // ═══════════════════════════════════════════════
 function saveBR(){S.br.start=parseFloat(document.getElementById('br-s').value)||10000;S.br.unit=parseFloat(document.getElementById('br-u').value)||100;S.br.kelly=parseFloat(document.getElementById('br-k').value);S.br.maxPct=parseFloat(document.getElementById('br-m').value)||3;save();rPerf();}
 function loadBRUI(){document.getElementById('br-s').value=S.br.start;document.getElementById('br-u').value=S.br.unit;document.getElementById('br-k').value=S.br.kelly;document.getElementById('br-m').value=S.br.maxPct;}
+
+// ── Daily Bankroll System ─────────────────────────────────────────────────
+// S._dailyBR = { 'YYYY-MM-DD': { start: 10000, confirmed: true } }
+if(!S._dailyBR) S._dailyBR = {};
+
+function dateToYMD(mmddyyyy){
+  // converts "03/27/2026" → "2026-03-27"
+  if(!mmddyyyy) return '';
+  const p = mmddyyyy.split('/');
+  if(p.length === 3) return `${p[2]}-${p[0].padStart(2,'0')}-${p[1].padStart(2,'0')}`;
+  return mmddyyyy; // already YYYY-MM-DD
+}
+
+function ymdToMDY(ymd){
+  if(!ymd) return '';
+  const p = ymd.split('-');
+  if(p.length === 3) return `${p[1]}/${p[2]}/${p[0]}`;
+  return ymd;
+}
+
+function getDailyStartBR(dateMMDDYYYY){
+  // Returns confirmed start BR for a given date (MM/DD/YYYY or YYYY-MM-DD)
+  const ymd = dateMMDDYYYY.includes('/') ? dateToYMD(dateMMDDYYYY) : dateMMDDYYYY;
+  const entry = S._dailyBR && S._dailyBR[ymd];
+  return entry && entry.confirmed ? entry.start : null;
+}
+
+function getTodayStartBR(){
+  const today = getActiveDate(); // YYYY-MM-DD
+  return getDailyStartBR(today);
+}
+
+function calcClosingBalance(dateYMD){
+  // Returns the closing balance for a given YYYY-MM-DD date
+  // = confirmed start BR + net P&L from settled picks on that date
+  const startBR = getDailyStartBR(dateYMD);
+  if(!startBR) return null;
+  const mdy = ymdToMDY(dateYMD);
+  const dayPicks = S.picks.filter(p => {
+    const pYMD = p.dt.includes('/') ? dateToYMD(p.dt) : p.dt;
+    return pYMD === dateYMD && p.rs !== 'Pending';
+  });
+  // Net P&L in dollars using Kelly $ if available, else units × unit size
+  let pnl = 0;
+  for(const p of dayPicks){
+    const kd = p.ku ? (p.ku / 100) * startBR : null;
+    if(kd !== null){
+      // kuw is won/lost in units of ku%, so multiply by startBR/100
+      pnl += (p.kuw || 0) * startBR / 100;
+    } else {
+      pnl += (p.uw || 0) * (S.br.unit || 100);
+    }
+  }
+  return startBR + pnl;
+}
+
+function calcAutoStartBR(todayYMD){
+  // Walk backwards to find the most recent day with a confirmed start + closing balance
+  for(let i = 1; i <= 30; i++){
+    const d = new Date(todayYMD + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() - i);
+    const ymd = d.toISOString().slice(0,10);
+    const closing = calcClosingBalance(ymd);
+    if(closing !== null) return { amount: closing, basis: ymd };
+    // No confirmed start for that day — check if there are any picks
+    const mdy = ymdToMDY(ymd);
+    const dayPicks = S.picks.filter(p => {
+      const pYMD = p.dt.includes('/') ? dateToYMD(p.dt) : p.dt;
+      return pYMD === ymd;
+    });
+    // No picks that day either — keep going back
+  }
+  // Fallback to S.br.start
+  return { amount: S.br.start || 10000, basis: 'settings' };
+}
+
+function showDailyBRBanner(){
+  const today = getActiveDate();
+  const existing = S._dailyBR && S._dailyBR[today];
+  if(existing && existing.confirmed) return; // already confirmed, only show via button
+
+  const auto = calcAutoStartBR(today);
+  const banner = document.getElementById('daily-br-banner');
+  const calcEl = document.getElementById('daily-br-calc');
+  const inputEl = document.getElementById('daily-br-input');
+  const noteEl = document.getElementById('daily-br-note');
+
+  const amt = auto.amount;
+  calcEl.textContent = '$' + Math.round(amt).toLocaleString();
+  inputEl.value = Math.round(amt);
+  noteEl.textContent = auto.basis === 'settings'
+    ? 'Based on settings (no prior history)'
+    : `Based on closing balance from ${auto.basis}`;
+
+  banner.style.display = 'flex';
+}
+
+function confirmDailyBR(){
+  const today = getActiveDate();
+  const inputEl = document.getElementById('daily-br-input');
+  const amount = parseFloat(inputEl.value) || 10000;
+  if(!S._dailyBR) S._dailyBR = {};
+  S._dailyBR[today] = { start: amount, confirmed: true };
+  // Save to Firestore
+  try {
+    db.collection('bankroll').doc('daily_' + today).set({ start: amount, confirmed: true, date: today });
+  } catch(e){ console.warn('Daily BR Firestore save failed', e); }
+  localStorage.setItem('mlb26v3', JSON.stringify(S));
+  document.getElementById('daily-br-banner').style.display = 'none';
+  rPerf();
+  rPicks();
+  updateKellyRec();
+  toast('Day start locked: $' + Math.round(amount).toLocaleString());
+}
+
+function dismissDailyBR(){
+  document.getElementById('daily-br-banner').style.display = 'none';
+}
+
+function updateKellyRec(){
+  // Update Kelly $ recommendation in log pick form
+  const od = parseFloat(document.getElementById('p-od')?.value);
+  const ku = parseFloat(document.getElementById('p-ed')?.value);
+  const recEl = document.getElementById('p-kelly-rec');
+  const pctEl = document.getElementById('p-kelly-pct');
+  if(!recEl) return;
+
+  const anchor = getTodayStartBR() || S.br.start || 10000;
+  const odVal = parseFloat(document.getElementById('p-od')?.value);
+  const edVal = parseFloat(document.getElementById('p-ed')?.value);
+  if(!isNaN(odVal) && !isNaN(edVal) && edVal > 0){
+    const kuPct = calcKellyUnits(odVal, edVal) * (S.br.kelly || 0.5);
+    const capped = Math.min(kuPct, S.br.maxPct || 3);
+    const dollar = (capped / 100) * anchor;
+    recEl.textContent = '$' + dollar.toFixed(0);
+    recEl.style.color = 'var(--accent)';
+    pctEl.textContent = capped.toFixed(2) + '% of $' + Math.round(anchor).toLocaleString();
+  } else {
+    recEl.textContent = '—';
+    recEl.style.color = 'var(--muted)';
+    pctEl.textContent = getTodayStartBR() ? '0.00% of $' + Math.round(anchor).toLocaleString() : 'confirm today\'s start first';
+  }
+}
+
+function checkDailyBROnLoad(){
+  const today = getActiveDate();
+  const existing = S._dailyBR && S._dailyBR[today];
+  if(!existing || !existing.confirmed){
+    // Small delay so UI is ready
+    setTimeout(showDailyBRBanner, 800);
+  }
+  updateDailyBRStatusPanel();
+}
+
+function updateDailyBRStatusPanel(){
+  const today = getActiveDate();
+  const anchor = getTodayStartBR();
+  const startEl = document.getElementById('br-today-start');
+  const confEl = document.getElementById('br-today-confirmed');
+  const tomorrowEl = document.getElementById('br-tomorrow-start');
+  const kellyAnchorEl = document.getElementById('br-kelly-anchor');
+  if(!startEl) return;
+
+  if(anchor){
+    startEl.textContent = '$' + Math.round(anchor).toLocaleString();
+    confEl.textContent = '✓ confirmed';
+    confEl.style.color = 'var(--green)';
+    // Tomorrow's projected start = today's start + today's settled P&L
+    const closing = calcClosingBalance(today);
+    tomorrowEl.textContent = closing !== null ? '$' + Math.round(closing).toLocaleString() : '—';
+    kellyAnchorEl.textContent = '$' + Math.round(anchor).toLocaleString() + ' (Kelly sizing anchor)';
+  } else {
+    startEl.textContent = '—';
+    confEl.textContent = 'not confirmed';
+    confEl.style.color = 'var(--red)';
+    tomorrowEl.textContent = '—';
+    kellyAnchorEl.textContent = 'Confirm today\'s start to enable Kelly $';
+  }
+}
+
+
 
 // ═══════════════════════════════════════════════
 // TOOLS
@@ -3816,10 +4044,11 @@ async function loadFromFirebase(){
   try {
     // One-time load for initial render, then set up real-time listeners
     const today = getActiveDate();
-    const [gamesSnap, ovSnap, brSnap] = await Promise.all([
+    const [gamesSnap, ovSnap, brSnap, dailyBRSnap] = await Promise.all([
       db.collection('games').doc(today).get(),
       db.collection('overrides').doc('current').get(),
       db.collection('bankroll').doc('settings').get(),
+      db.collection('bankroll').doc('daily_' + today).get(),
     ]);
     if(gamesSnap.exists){
       const dbGames = gamesSnap.data().games || [];
@@ -3838,6 +4067,10 @@ async function loadFromFirebase(){
     }
     if(brSnap.exists) S.br = {...S.br, ...brSnap.data()};
 
+    // Load daily BR snapshot for today
+    if(!S._dailyBR) S._dailyBR = {};
+    if(dailyBRSnap.exists) S._dailyBR[today] = dailyBRSnap.data();
+
     // Load projections from localStorage
     load();
 
@@ -3848,11 +4081,15 @@ async function loadFromFirebase(){
     // Now set up real-time listeners (picks + activity)
     setupRealtimeListeners();
     subscribeToGamesDate(getActiveDate());
-    loadActivityLog(); // Start activity listener immediately on login
+    loadActivityLog();
+
+    // Check daily BR
+    checkDailyBROnLoad();
     console.log('Firebase loaded, listeners active');
   } catch(e){
     console.error('Firebase load failed, falling back to localStorage:', e);
     load(); rGames(); rPicks(); rPerf(); loadBRUI();
+    checkDailyBROnLoad();
   }
 }
 
