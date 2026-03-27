@@ -2204,7 +2204,7 @@ function rPicks(){
                        : (p.uw>0?'var(--green)':p.uw<0?'var(--red)':'var(--muted)');
     return `<tr style="cursor:pointer;" onclick="openGameModal(${p.id})" title="Click to view game details">
       <td style="color:var(--muted);text-align:center">${S.picks.length - i}</td>
-      <td style="text-align:center"><button class="btn bg" style="padding:2px 6px;font-size:9px;" onclick="openEditPick(${p.id})">✎</button></td>
+      <td style="text-align:center"><button class="btn bg" style="padding:2px 6px;font-size:9px;" onclick="event.stopPropagation();openEditPick(${p.id})">✎</button></td>
       <td style="color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${p.tp||'—'}</td>
       <td style="white-space:nowrap;font-size:11px">${p.dt}</td>
       <td style="font-weight:600;white-space:nowrap"><img src="${teamLogo(p.tx)}" width="16" height="16" style="object-fit:contain;vertical-align:middle;margin-right:4px;" onerror="this.style.display='none'" />${p.tx||'—'}</td>
@@ -3865,10 +3865,11 @@ function closeGameModal(){
 function switchGameTab(tab, btn){
   document.querySelectorAll('.gm-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  ['bet','box'].forEach(t => {
+  ['bet','box','scoring'].forEach(t => {
     document.getElementById('gm-tab-'+t).style.display = t===tab ? '' : 'none';
   });
   if(tab === 'box' && !_gameModalData.boxscore) fetchBoxscore();
+  if(tab === 'scoring' && !_gameModalData.scoring) fetchScoring();
 }
 
 async function openGameModal(pickId){
@@ -3880,6 +3881,7 @@ async function openGameModal(pickId){
   // Reset tabs
   document.querySelectorAll('.gm-tab').forEach((b,i) => b.classList.toggle('active', i===0));
   document.getElementById('gm-tab-box').style.display = 'none';
+  document.getElementById('gm-tab-scoring').style.display = 'none';
   document.getElementById('gm-tab-bet').style.display = '';
   document.getElementById('gm-linescore-strip').innerHTML = '<div style="color:var(--muted);font-size:11px;padding:8px 0;">Loading linescore…</div>';
 
@@ -3968,9 +3970,21 @@ function renderLinescoreStrip(data){
   const awBold = awAbr === betAbr ? 'font-weight:800;color:var(--accent);' : '';
   const hwBold = hwAbr === betAbr ? 'font-weight:800;color:var(--accent);' : '';
 
+  // Get decisions from cached boxscore if available
+  const dec = _gameModalData.boxscore?.decisions || {};
+  const winName = dec.winner?.fullName || '';
+  const lossName = dec.loser?.fullName || '';
+  const saveName = dec.save?.fullName || '';
+  const decisionHtml = (winName||lossName||saveName) ? `
+    <div style="font-size:10px;color:var(--text2);margin-top:6px;line-height:1.8;">
+      ${winName ? `<span><b style="color:var(--green)">W:</b> ${winName}</span>  ` : ''}
+      ${lossName ? `<span><b style="color:var(--red)">L:</b> ${lossName}</span>  ` : ''}
+      ${saveName ? `<span><b style="color:var(--accent)">SV:</b> ${saveName}</span>` : ''}
+    </div>` : '';
+
   document.getElementById('gm-linescore-strip').innerHTML = `
-    <div style="overflow-x:auto;padding:8px 0;">
-      <table class="ls-table" style="font-size:11px;">
+    <div style="display:flex;align-items:flex-start;gap:20px;padding:8px 0;overflow-x:auto;">
+      <table class="ls-table" style="font-size:11px;flex-shrink:0;">
         <thead><tr>
           <th style="text-align:left;min-width:50px;">Team</th>
           ${inningNums}
@@ -3991,6 +4005,7 @@ function renderLinescoreStrip(data){
           </tr>
         </tbody>
       </table>
+      ${decisionHtml}
     </div>`;
 }
 
@@ -4022,9 +4037,11 @@ async function fetchBoxscore(){
 
 function toET(timeStr){
   if(!timeStr) return '—';
+  // Already has ET or AM/PM — just return as-is
+  if(timeStr.includes('ET') || timeStr.match(/[AP]M/)) return timeStr;
   try {
-    if(timeStr.includes('ET')) return timeStr;
     const d = new Date(timeStr);
+    if(isNaN(d)) return timeStr;
     return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'}) + ' ET';
   } catch(e){ return timeStr; }
 }
@@ -4135,9 +4152,9 @@ function renderBoxscoreTeam(){
     return `<div class="bs-section">
       <div class="bs-title">${ab} Batting</div>
       <table class="bs-table">
-        <thead><tr><th>Player</th><th>AB</th><th>R</th><th>H</th><th>RBI</th><th>BB</th><th>SO</th><th>AVG</th></tr></thead>
+        <thead><tr><th>Player</th><th>AB</th><th>R</th><th>H</th><th>RBI</th><th>BB</th><th>SO</th></tr></thead>
         <tbody>${rows}
-          <tr class="totals"><td>Totals</td><td>${tot.atBats??0}</td><td>${tot.runs??0}</td><td>${tot.hits??0}</td><td>${tot.rbi??0}</td><td>${tot.baseOnBalls??0}</td><td>${tot.strikeOuts??0}</td><td></td></tr>
+          <tr class="totals"><td>Totals</td><td>${tot.atBats??0}</td><td>${tot.runs??0}</td><td>${tot.hits??0}</td><td>${tot.rbi??0}</td><td>${tot.baseOnBalls??0}</td><td>${tot.strikeOuts??0}</td></tr>
         </tbody>
       </table></div>`;
   }
@@ -4145,7 +4162,7 @@ function renderBoxscoreTeam(){
   function pitchingTable(td, ab){
     const pitchers = Object.values(td.players || {})
       .filter(pl => pl.stats?.pitching && pl.stats.pitching.inningsPitched && parseFloat(pl.stats.pitching.inningsPitched) > 0)
-      .sort((a,b) => (a.pitchingOrder||99) - (b.pitchingOrder||99));
+      .sort((a,b) => (a.gameOrder||a.pitchingOrder||99) - (b.gameOrder||b.pitchingOrder||99));
     const rows = pitchers.map(pl => {
       const pt = pl.stats.pitching;
       const id = pl.person?.id;
@@ -4154,13 +4171,17 @@ function renderBoxscoreTeam(){
       else if(id && id === lossId) cls = 'pitcher-loss';
       else if(id && id === saveId) cls = 'pitcher-save';
       else if(pt.holds > 0) cls = 'pitcher-hold';
-      return `<tr class="${cls}"><td>${pl.person?.fullName||'?'}</td><td>${pt.inningsPitched||0}</td><td>${pt.hits??0}</td><td>${pt.runs??0}</td><td>${pt.earnedRuns??0}</td><td>${pt.baseOnBalls??0}</td><td>${pt.strikeOuts??0}</td><td>${pt.era||'—'}</td></tr>`;
+      return `<tr class="${cls}"><td>${pl.person?.fullName||'?'}</td><td>${pt.inningsPitched||0}</td><td>${pt.hits??0}</td><td>${pt.runs??0}</td><td>${pt.earnedRuns??0}</td><td>${pt.baseOnBalls??0}</td><td>${pt.strikeOuts??0}</td></tr>`;
     }).join('');
+    const ptot = td.teamStats?.pitching || {};
+    const totalIP = pitchers.reduce((s,pl) => s + parseFloat(pl.stats.pitching.inningsPitched||0), 0).toFixed(1);
     return `<div class="bs-section">
       <div class="bs-title">${ab} Pitching</div>
       <table class="bs-table">
-        <thead><tr><th>Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>SO</th><th>ERA</th></tr></thead>
-        <tbody>${rows}</tbody>
+        <thead><tr><th>Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>SO</th></tr></thead>
+        <tbody>${rows}
+          <tr class="totals"><td>Totals</td><td>${ptot.inningsPitched||totalIP}</td><td>${ptot.hits??0}</td><td>${ptot.runs??0}</td><td>${ptot.earnedRuns??0}</td><td>${ptot.baseOnBalls??0}</td><td>${ptot.strikeOuts??0}</td></tr>
+        </tbody>
       </table></div>`;
   }
 
@@ -4182,6 +4203,61 @@ function renderBoxscoreTeam(){
 function renderBoxscore(data){
   _boxTeam = 'away';
   renderBoxscoreTeam();
+}
+
+async function fetchScoring(){
+  const pk = _gameModalData.gamePk;
+  const tab = document.getElementById('gm-tab-scoring');
+  if(!pk){ tab.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center;">Game data not available</div>'; return; }
+  tab.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center;">Loading…</div>';
+  try {
+    const res = await fetch(`${PROXY_BASE}/mlb-api/game/${pk}/playByPlay`);
+    const data = await res.json();
+    _gameModalData.scoring = data;
+    renderScoring(data);
+  } catch(e){ tab.innerHTML = '<div style="color:var(--red);padding:20px;">Failed to load scoring plays</div>'; }
+}
+
+function renderScoring(data){
+  const p = _gameModalPick;
+  const awAbr = p?.ha === '@' ? p.tx : p.opp;
+  const hwAbr = p?.ha === 'vs' ? p.tx : p.opp;
+  const allPlays = data.allPlays || [];
+  const scoring = allPlays.filter(pl => pl.about?.isScoringPlay);
+
+  if(!scoring.length){
+    document.getElementById('gm-tab-scoring').innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center;">No scoring plays found</div>';
+    return;
+  }
+
+  let awScore = 0, hwScore = 0;
+  const rows = scoring.map(pl => {
+    const inn = pl.about?.inning || '?';
+    const side = pl.about?.halfInning === 'top' ? 'top' : 'bot';
+    const teamAbr = side === 'top' ? awAbr : hwAbr;
+    const rbi = pl.result?.rbi || 0;
+    if(side === 'top') awScore += rbi; else hwScore += rbi;
+    const desc = pl.result?.description || '';
+    const score = `${awScore}-${hwScore}`;
+    const color = teamAbr === p?.tx ? 'var(--accent)' : 'var(--text2)';
+    return `<tr>
+      <td style="color:var(--muted);white-space:nowrap;font-size:10px;">${side==='top'?'▲':'▼'}${inn}</td>
+      <td style="font-weight:700;color:${color}">${teamAbr}</td>
+      <td style="color:var(--muted);text-align:right;font-family:var(--mono);white-space:nowrap;">${score}</td>
+      <td style="font-size:11px;">${desc}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('gm-tab-scoring').innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <thead><tr style="border-bottom:1px solid var(--border);">
+        <th style="padding:4px 8px;text-align:left;color:var(--muted);font-size:10px;">Inn</th>
+        <th style="padding:4px 8px;text-align:left;color:var(--muted);font-size:10px;">Team</th>
+        <th style="padding:4px 8px;text-align:right;color:var(--muted);font-size:10px;">Score</th>
+        <th style="padding:4px 8px;text-align:left;color:var(--muted);font-size:10px;">Play</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
 }
 </script>
 
@@ -4246,17 +4322,18 @@ function renderBoxscore(data){
       <span onclick="closeGameModal()" style="cursor:pointer;color:var(--muted);font-size:22px;line-height:1;margin-left:16px;">×</span>
     </div>
     <!-- Linescore always visible under header -->
-    <div style="padding:0 20px 12px;border-bottom:1px solid var(--border);overflow-x:auto;" id="gm-linescore-strip">
+    <div style="padding:0 20px 12px;border-bottom:1px solid var(--border);overflow-x:auto;min-height:68px;" id="gm-linescore-strip">
       <div style="color:var(--muted);font-size:11px;padding:8px 0;">Loading linescore…</div>
     </div>
-    <!-- Tabs: Your Bet | Box Score only -->
     <div class="gm-tabs">
       <div class="gm-tab active" onclick="switchGameTab('bet',this)">Your Bet</div>
       <div class="gm-tab" onclick="switchGameTab('box',this)">Box Score</div>
+      <div class="gm-tab" onclick="switchGameTab('scoring',this)">Scoring</div>
     </div>
     <div class="gm-body">
       <div id="gm-tab-bet"></div>
       <div id="gm-tab-box" style="display:none"></div>
+      <div id="gm-tab-scoring" style="display:none"></div>
     </div>
   </div>
 </div>
