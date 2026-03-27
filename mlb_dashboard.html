@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MLB ALGO 2026</title>
+<title>xMLB ALGO 2026</title>
 
 <style>
 
@@ -684,8 +684,8 @@ input[type=number] { -moz-appearance:textfield; }
 .gm-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
 /* Linescore table */
 .ls-table { width:100%;border-collapse:collapse;font-size:12px;font-family:var(--mono); }
-.ls-table th { background:#f5f5f5;padding:6px 8px;text-align:center;color:var(--muted);font-weight:600;font-size:10px; }
-.ls-table td { padding:6px 8px;text-align:center;border-bottom:1px solid #f0f0f0; }
+.ls-table th { background:#f5f5f5;padding:3px 6px;text-align:center;color:var(--muted);font-weight:600;font-size:10px; }
+.ls-table td { padding:3px 6px;text-align:center;border-bottom:1px solid #f0f0f0; }
 .ls-table td:first-child { text-align:left;font-weight:600;font-size:11px; }
 .ls-table .rhe { font-weight:700;background:#f9f9f9;border-left:2px solid var(--border); }
 /* Box score */
@@ -3926,6 +3926,13 @@ async function fetchGamePk(p){
     if(!games.length) return;
     const gamePk = games[0].gamePk;
     _gameModalData.gamePk = gamePk;
+    // Store decisions from schedule data (winner/loser/save pitcher names)
+    const dec = games[0].decisions || {};
+    _gameModalData.decisions = {
+      winName: dec.winner?.fullName || '',
+      lossName: dec.loser?.fullName || '',
+      saveName: dec.save?.fullName || ''
+    };
     fetchLinescoreStrip(); // load immediately into header
 
     // Update score if final
@@ -3969,11 +3976,11 @@ function renderLinescoreStrip(data){
   const awBold = awAbr === betAbr ? 'font-weight:800;color:var(--accent);' : '';
   const hwBold = hwAbr === betAbr ? 'font-weight:800;color:var(--accent);' : '';
 
-  // Get decisions from cached boxscore if available
-  const dec = _gameModalData.boxscore?.decisions || {};
-  const winName = dec.winner?.fullName || '';
-  const lossName = dec.loser?.fullName || '';
-  const saveName = dec.save?.fullName || '';
+  // Get decisions stored from schedule fetch
+  const dec = _gameModalData.decisions || {};
+  const winName = dec.winName || '';
+  const lossName = dec.lossName || '';
+  const saveName = dec.saveName || '';
   const decisionHtml = (winName||lossName||saveName) ? `
     <div style="font-size:10px;line-height:2;flex-shrink:0;border-left:2px solid var(--border);padding-left:14px;min-width:140px;">
       ${winName ? `<div><b style="color:var(--green)">W:</b> ${winName}</div>` : ''}
@@ -3983,7 +3990,7 @@ function renderLinescoreStrip(data){
 
   document.getElementById('gm-linescore-strip').innerHTML = `
     <div style="display:flex;align-items:flex-start;gap:16px;padding:8px 0;">
-      <table class="ls-table" style="font-size:11px;flex-shrink:0;width:auto;">
+      <table class="ls-table" style="font-size:10px;flex-shrink:0;width:auto;">
         <thead><tr>
           <th style="text-align:left;min-width:50px;">Team</th>
           ${inningNums}
@@ -4169,7 +4176,7 @@ function renderBoxscoreTeam(){
   function pitchingTable(td, ab){
     const pitchers = Object.values(td.players || {})
       .filter(pl => pl.stats?.pitching && pl.stats.pitching.inningsPitched && parseFloat(pl.stats.pitching.inningsPitched) > 0)
-      .sort((a,b) => (a.gameOrder||a.pitchingOrder||99) - (b.gameOrder||b.pitchingOrder||99));
+      .sort((a,b) => (a.stats?.pitching?.sequenceNumber||a.gameOrder||99) - (b.stats?.pitching?.sequenceNumber||b.gameOrder||99));
     const rows = pitchers.map(pl => {
       const pt = pl.stats.pitching;
       const id = pl.person?.id;
@@ -4329,7 +4336,7 @@ function renderScoring(data){
       <span onclick="closeGameModal()" style="cursor:pointer;color:var(--muted);font-size:22px;line-height:1;margin-left:16px;">×</span>
     </div>
     <!-- Linescore always visible under header -->
-    <div style="padding:0 20px 12px;border-bottom:1px solid var(--border);overflow-x:auto;min-height:68px;" id="gm-linescore-strip">
+    <div style="padding:0 20px;border-bottom:1px solid var(--border);height:68px;overflow:hidden;box-sizing:border-box;" id="gm-linescore-strip">
       <div style="color:var(--muted);font-size:11px;padding:8px 0;">Loading linescore…</div>
     </div>
     <div class="gm-tabs">
