@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>eMLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -4018,30 +4018,26 @@ function renderLinescoreStrip(data){
 
   // Get decisions stored from schedule fetch
   const dec = _gameModalData.decisions || {};
-  const winName = dec.winName || '';
-  const lossName = dec.lossName || '';
-  const saveName = dec.saveName || '';
-  const dec = _gameModalData.decisions || {};
 
-  function pitcherEntry(label, name, img, stat){
-    if(!name) return '';
-    const w = stat?.wins ?? '';
-    const l = stat?.losses ?? '';
-    const sv = stat?.saves ?? '';
-    const record = label==='W'||label==='L' ? (w!==''&&l!=='' ? ` (${w}-${l})` : '') : (sv!=='' ? ` (${sv} SV)` : '');
-    const photo = img ? `<img src="${img}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;margin-right:8px;flex-shrink:0;" onerror="this.style.display='none'" />` : '';
-    return `<div style="display:flex;align-items:center;margin-bottom:4px;">
-      ${photo}
-      <span style="font-size:11px;"><b>${label}:</b> ${name}<span style="color:var(--muted);font-size:10px;">${record}</span></span>
-    </div>`;
-  }
-
-  const decisionHtml = (dec.winName||dec.lossName||dec.saveName) ? `
-    <div style="flex-shrink:0;border-left:2px solid var(--border);padding-left:16px;">
-      ${pitcherEntry('W',  dec.winName,  dec.winImg,  dec.winStat)}
-      ${pitcherEntry('L',  dec.lossName, dec.lossImg, dec.lossStat)}
-      ${pitcherEntry('SV', dec.saveName, dec.saveImg, dec.saveStat)}
-    </div>` : '';
+  const decisionHtml = (function(){
+    if(!dec.winName && !dec.lossName && !dec.saveName) return '';
+    function pe(label, name, img, stat){
+      if(!name) return '';
+      const wins = stat && stat.wins != null ? stat.wins : '';
+      const losses = stat && stat.losses != null ? stat.losses : '';
+      const saves = stat && stat.saves != null ? stat.saves : '';
+      let record = '';
+      if((label==='W'||label==='L') && wins!=='' && losses!=='') record = ' (' + wins + '-' + losses + ')';
+      else if(label==='SV' && saves!=='') record = ' (' + saves + ' SV)';
+      const photo = img ? '<img src="' + img + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;margin-right:8px;flex-shrink:0;" onerror="this.style.visibility=\'hidden\'" />' : '';
+      return '<div style="display:flex;align-items:center;margin-bottom:4px;">' + photo + '<span style="font-size:11px;"><b>' + label + ':</b> ' + name + '<span style="color:var(--muted);font-size:10px;">' + record + '</span></span></div>';
+    }
+    return '<div style="flex-shrink:0;border-left:2px solid var(--border);padding-left:16px;">'
+      + pe('W',  dec.winName,  dec.winImg,  dec.winStat)
+      + pe('L',  dec.lossName, dec.lossImg, dec.lossStat)
+      + pe('SV', dec.saveName, dec.saveImg, dec.saveStat)
+      + '</div>';
+  })();
 
   document.getElementById('gm-linescore-strip').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:center;gap:24px;width:100%;padding:8px;background:#fff;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.1);">
@@ -4419,7 +4415,7 @@ function renderScoring(data){
       <span onclick="closeGameModal()" style="cursor:pointer;color:var(--muted);font-size:22px;line-height:1;margin-left:16px;">×</span>
     </div>
     <!-- Linescore always visible under header -->
-    <div style="padding:8px 20px;border-bottom:1px solid var(--border);height:116px;overflow:hidden;box-sizing:border-box;display:flex;align-items:center;" id="gm-linescore-strip">
+    <div style="padding:8px 20px;border-bottom:1px solid var(--border);min-height:100px;box-sizing:border-box;display:flex;align-items:center;" id="gm-linescore-strip">
       <div style="color:var(--muted);font-size:12px;">Loading linescore…</div>
     </div>
     <div class="gm-tabs">
