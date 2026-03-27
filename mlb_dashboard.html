@@ -3931,13 +3931,15 @@ async function fetchGamePk(p){
     if(!games.length) return;
     const gamePk = games[0].gamePk;
     _gameModalData.gamePk = gamePk;
-    // Store decisions from schedule data (winner/loser/save pitcher names)
+    // Store decisions from schedule as initial fallback (boxscore will override when loaded)
     const dec = games[0].decisions || {};
-    _gameModalData.decisions = {
-      winName: dec.winner?.fullName || '',
-      lossName: dec.loser?.fullName || '',
-      saveName: dec.save?.fullName || ''
-    };
+    if(dec.winner || dec.loser || dec.save){
+      _gameModalData.decisions = {
+        winName: dec.winner?.fullName || '',
+        lossName: dec.loser?.fullName || '',
+        saveName: dec.save?.fullName || ''
+      };
+    }
     fetchLinescoreStrip(); // load immediately into header
 
     // Update score if final
@@ -4042,6 +4044,17 @@ async function fetchBoxscore(){
     const res = await fetch(`${PROXY_BASE}/mlb-api/game/${pk}/boxscore`);
     const data = await res.json();
     _gameModalData.boxscore = data;
+    // Extract decisions from boxscore (more reliable than schedule API)
+    const bd = data.decisions || {};
+    if(bd.winner || bd.loser || bd.save){
+      _gameModalData.decisions = {
+        winName: bd.winner?.fullName || '',
+        lossName: bd.loser?.fullName || '',
+        saveName: bd.save?.fullName || ''
+      };
+      // Re-render linescore strip now that we have decisions
+      if(_gameModalData.linescore) renderLinescoreStrip(_gameModalData.linescore);
+    }
     renderBoxscore(data);
   } catch(e){ tab.innerHTML = '<div style="color:var(--red);padding:20px;">Failed to load box score</div>'; }
 }
@@ -4179,9 +4192,15 @@ function renderBoxscoreTeam(){
   }
 
   function pitchingTable(td, ab){
+    // Use the pitchers array (ordered list of IDs) to sort correctly
+    const pitcherIdOrder = (td.pitchers || []).map(id => String(id));
     const pitchers = Object.values(td.players || {})
       .filter(pl => pl.stats?.pitching && pl.stats.pitching.inningsPitched && parseFloat(pl.stats.pitching.inningsPitched) > 0)
-      .sort((a,b) => (a.stats?.pitching?.sequenceNumber||a.gameOrder||99) - (b.stats?.pitching?.sequenceNumber||b.gameOrder||99));
+      .sort((a,b) => {
+        const ai = pitcherIdOrder.indexOf(String(a.person?.id));
+        const bi = pitcherIdOrder.indexOf(String(b.person?.id));
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+      });
     const rows = pitchers.map(pl => {
       const pt = pl.stats.pitching;
       const id = pl.person?.id;
