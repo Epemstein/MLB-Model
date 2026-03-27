@@ -1128,10 +1128,30 @@ function calcAllProjWins(){
   for(const t of TEAMS_30) teamWAR[t] = 0;
   for(const p of PROJ_HITTERS){ if(teamWAR[p.team] != null) teamWAR[p.team] += p.war||0; }
   for(const p of PROJ_PITCHERS){ if(teamWAR[p.team] != null) teamWAR[p.team] += p.war||0; }
-  const vals = TEAMS_30.map(t => teamWAR[t]);
+
+  // Scale RoS WAR to full 162-game season so teams are comparable.
+  // Use live standings GP if available, else fall back to TEAM_DATA.games_remaining.
+  const scaledWAR = {};
+  for(const t of TEAMS_30){
+    const td = TEAM_DATA[t] || {};
+    // Try to get games played from live standings
+    let gp = 0;
+    if(_standingsData && _standingsData.length){
+      for(const div of _standingsData){
+        const tr = (div.teamRecords||[]).find(r => (MLB_ID_TO_ABR[r.team?.id]||r.team?.abbreviation) === t);
+        if(tr){ gp = (tr.wins||0) + (tr.losses||0); break; }
+      }
+    }
+    let gRem = gp > 0 ? (162 - gp) : (td.games_remaining || 162);
+    if(gRem <= 0) gRem = 1; // safety
+    // scale: RoS WAR is for ~gRem games, normalize to 162
+    scaledWAR[t] = teamWAR[t] * (162 / gRem);
+  }
+
+  const vals = TEAMS_30.map(t => scaledWAR[t]);
   const avg = vals.reduce((a,b)=>a+b,0) / vals.length;
   const result = {};
-  for(const t of TEAMS_30) result[t] = 81 + (teamWAR[t] - avg) * 1.15;
+  for(const t of TEAMS_30) result[t] = 81 + (scaledWAR[t] - avg) * 1.15;
   return result;
 }
 
@@ -3390,6 +3410,7 @@ async function fetchStandings(){
     if(!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     _standingsData = data.records || [];
+    _projWinsCache = null; // recalculate with fresh games-played data
     const ts = new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
     status.textContent = 'Updated ' + ts;
     renderStandings();
