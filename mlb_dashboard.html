@@ -2924,21 +2924,21 @@ function calcClosingBalance(dateYMD){
   // = confirmed start BR + net P&L from settled picks on that date
   const startBR = getDailyStartBR(dateYMD);
   if(!startBR) return null;
-  const mdy = ymdToMDY(dateYMD);
+  const unit = S.br.unit || 100;
   const dayPicks = S.picks.filter(p => {
     const pYMD = p.dt.includes('/') ? dateToYMD(p.dt) : p.dt;
     return pYMD === dateYMD && p.rs !== 'Pending';
   });
-  // Net P&L in dollars using Kelly $ if available, else units × unit size
   let pnl = 0;
   for(const p of dayPicks){
-    const kd = p.ku ? (p.ku / 100) * startBR : null;
-    if(kd !== null){
-      // kuw is won/lost in units of ku%, so multiply by startBR/100
-      pnl += (p.kuw || 0) * startBR / 100;
-    } else {
-      pnl += (p.uw || 0) * (S.br.unit || 100);
-    }
+    // Use actual $ if set, else Kelly rec $, else flat units
+    const actual = (p._kellyActual != null && p._kellyActual !== '') ? parseFloat(p._kellyActual) : null;
+    const recKuPct = p.ku ? Math.min(p.ku * (S.br.kelly||0.5), S.br.maxPct||3) : 0;
+    const riskD = actual !== null ? actual : (recKuPct > 0 ? recKuPct/100*startBR : p.un*unit);
+    let wonD;
+    if(p.od >= 0) wonD = p.rs === 'Win' ? riskD*(p.od/100) : -riskD;
+    else          wonD = p.rs === 'Win' ? riskD*(100/Math.abs(p.od)) : -riskD;
+    pnl += wonD;
   }
   return startBR + pnl;
 }
@@ -3797,17 +3797,17 @@ function renderKellyTracker(){
   // ── RIGHT: day summary ────────────────────────────────────────────────
   const dayRows=daySummaries.map((d,i)=>{
     const pnlC=d.pnl>=0?'var(--green)':'var(--red)';
-    const pnlStr=(d.pnl>=0?'+$':'-$')+Math.abs(d.pnl).toFixed(0);
+    const pnlStr=(d.pnl>=0?'+$':'-$')+Math.round(Math.abs(d.pnl)).toLocaleString();
     const rowBg=i%2===0?'':'background:rgba(150,150,150,.07);';
     return `<tr style="${rowBg}border-bottom:1px solid var(--border);">
       <td style="padding:5px 8px;font-size:11px;color:var(--muted);white-space:nowrap;${FONT}">${d.ymd}</td>
       <td style="padding:5px 8px;text-align:right;">
-        <input type="number" value="${d.confirmed?Math.round(d.anchor):''}" placeholder="${Math.round(d.anchor)}"
+        <input type="number" value="${d.confirmed?Math.round(d.anchor).toLocaleString():''}" placeholder="${Math.round(d.anchor).toLocaleString()}"
           style="width:76px;padding:2px 5px;border:1px solid ${d.confirmed?'var(--accent)':'var(--border)'};border-radius:3px;background:var(--bg2);color:${d.confirmed?'var(--accent)':'var(--muted)'};font-size:11px;font-weight:${d.confirmed?'700':'400'};text-align:right;${FONT}"
           onchange="setDayStart('${d.ymd}',this.value)"
           title="${d.confirmed?'Confirmed — erase to use prior close':'Auto-calculated from prior close'}" />
       </td>
-      <td style="padding:5px 8px;text-align:right;font-size:11px;color:var(--muted);${FONT}">$${d.atRisk.toFixed(0)}${d.pending?' ('+d.pending+' pend)':''}</td>
+      <td style="padding:5px 8px;text-align:right;font-size:11px;color:var(--muted);${FONT}">$${Math.round(d.atRisk).toLocaleString()}${d.pending?' ('+d.pending+' pend)':''}</td>
       <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:600;color:${pnlC};${FONT}">${pnlStr}</td>
       <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:700;color:${pnlC};${FONT}">$${Math.round(d.close).toLocaleString()}</td>
     </tr>`;
