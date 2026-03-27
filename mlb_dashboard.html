@@ -1063,6 +1063,20 @@ input[type=number] { -moz-appearance:textfield; }
       <div id="vc-r" style="font-family:var(--mono);font-size:12px;color:var(--text2);margin-top:6px;">Enter both sides.</div>
     </div>
   </div>
+  <div class="card" style="margin-top:14px;">
+    <div class="ct">Data Management</div>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <button class="btn bg" onclick="clearProjCache()" style="padding:8px 16px;font-size:12px;">🗑 Clear Projection Cache</button>
+        <span style="font-size:11px;color:var(--muted);">Forces a fresh fetch next time projections load. Use after Steamer updates.</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <button class="btn bg proj-refresh-btn" onclick="fetchProjections(true)" style="padding:8px 16px;font-size:12px;">⟳ Refresh Projections Now</button>
+        <span style="font-size:11px;color:var(--muted);">Fetches latest Steamer RoS projections from FanGraphs immediately, bypassing cache.</span>
+      </div>
+      <div id="tools-proj-status" style="font-size:11px;color:var(--muted);font-family:var(--mono);"></div>
+    </div>
+  </div>
 </div>
 
 
@@ -3454,9 +3468,17 @@ document.addEventListener('click', function(e){
 // ═══════════════════════════════════════════════
 // LIVE STEAMER PROJECTION FETCH
 // ═══════════════════════════════════════════════
-const PROJ_LS_KEY   = 'mlb_proj_data_ros';  // 'ros' suffix forces cache bust from old preseason data
-const PROJ_LS_TS    = 'mlb_proj_ts_ros';
+const PROJ_LS_KEY   = 'mlb_proj_data_ros3';  // bumped to bust stale Steamer cache
+const PROJ_LS_TS    = 'mlb_proj_ts_ros3';
 const PROJ_MAX_AGE  = 22 * 60 * 60 * 1000; // 22 hours
+
+function clearProjCache(){
+  localStorage.removeItem(PROJ_LS_KEY);
+  localStorage.removeItem(PROJ_LS_TS);
+  const el = document.getElementById('tools-proj-status');
+  if(el) el.textContent = 'Cache cleared — projections will refresh on next load.';
+  toast('Projection cache cleared');
+}
 
 function setProjBtns(text, disabled){
   document.querySelectorAll('.proj-refresh-btn').forEach(b => { b.textContent = text; b.disabled = disabled; });
@@ -3517,6 +3539,9 @@ async function fetchProjections(force=false){
     }
 
     applyProjections(payload);
+    const ts = new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    const el = document.getElementById('tools-proj-status');
+    if(el) el.textContent = `Last refreshed: ${ts} — ${payload.bat?.length||0} hitters, ${payload.pit?.length||0} pitchers loaded.`;
     toast('Projections updated ✓');
   } catch(e) {
     console.error('Projection fetch failed:', e);
