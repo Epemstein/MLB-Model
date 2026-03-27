@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>vMLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -1144,7 +1144,9 @@ function calcAllProjWins(){
         }
       }
     } catch(e){ /* standings not yet initialized */ }
-    let gRem = gp > 0 ? (162 - gp) : (td.games_remaining || 162);
+    // If we have live GP, use it. If standings not loaded yet (gp=0), assume full 162
+    // to avoid using stale TEAM_DATA.games_remaining from a prior snapshot.
+    let gRem = gp > 0 ? (162 - gp) : 162;
     if(gRem <= 0) gRem = 1; // safety
     // scale: RoS WAR is for ~gRem games, normalize to 162
     scaledWAR[t] = teamWAR[t] * (162 / gRem);
