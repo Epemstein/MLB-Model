@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>xMLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -2470,6 +2470,10 @@ function doSwap(playerName, s600, war){
   if(!swapCtx) return;
   const g = S.games.find(g=>String(g.id)===String(swapCtx.gid));
   if(!g) return;
+  // Always look up war from PROJ_HITTERS with team filter — never trust the HTML-embedded value
+  // This prevents name collisions like Max Muncy (LAD vs ATH)
+  const proj = findHitter(swapCtx.team, playerName);
+  if(proj) war = proj.war162;
 
   if(!g.lineupOverrides) g.lineupOverrides = {};
   const key = `${swapCtx.side}_${swapCtx.slotIdx}`;
