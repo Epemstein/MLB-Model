@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>v2 MLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -659,10 +659,10 @@ input[type=number] { -moz-appearance:textfield; }
 }
 #game-modal {
   background:#fff;border-radius:10px;width:min(860px,96vw);
-  max-height:92vh;display:flex;flex-direction:column;
+  display:flex;flex-direction:column;
   box-shadow:0 16px 48px rgba(0,0,0,.3);
 }
-.gm-body { padding:20px;overflow-y:auto;flex:1;min-height:320px;max-height:480px; }
+.gm-body { padding:20px;overflow-y:auto;height:420px;flex-shrink:0; }
 .gm-header {
   display:flex;align-items:center;justify-content:space-between;
   padding:16px 20px;border-bottom:1px solid var(--border);
@@ -682,7 +682,6 @@ input[type=number] { -moz-appearance:textfield; }
   text-transform:uppercase;letter-spacing:.06em;
 }
 .gm-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
-.gm-body { padding:20px; }
 /* Linescore table */
 .ls-table { width:100%;border-collapse:collapse;font-size:12px;font-family:var(--mono); }
 .ls-table th { background:#f5f5f5;padding:6px 8px;text-align:center;color:var(--muted);font-weight:600;font-size:10px; }
@@ -3976,15 +3975,15 @@ function renderLinescoreStrip(data){
   const lossName = dec.loser?.fullName || '';
   const saveName = dec.save?.fullName || '';
   const decisionHtml = (winName||lossName||saveName) ? `
-    <div style="font-size:10px;color:var(--text2);margin-top:6px;line-height:1.8;">
-      ${winName ? `<span><b style="color:var(--green)">W:</b> ${winName}</span>  ` : ''}
-      ${lossName ? `<span><b style="color:var(--red)">L:</b> ${lossName}</span>  ` : ''}
-      ${saveName ? `<span><b style="color:var(--accent)">SV:</b> ${saveName}</span>` : ''}
+    <div style="font-size:10px;line-height:2;flex-shrink:0;border-left:2px solid var(--border);padding-left:14px;min-width:140px;">
+      ${winName ? `<div><b style="color:var(--green)">W:</b> ${winName}</div>` : ''}
+      ${lossName ? `<div><b style="color:var(--red)">L:</b> ${lossName}</div>` : ''}
+      ${saveName ? `<div><b style="color:var(--accent)">SV:</b> ${saveName}</div>` : ''}
     </div>` : '';
 
   document.getElementById('gm-linescore-strip').innerHTML = `
-    <div style="display:flex;align-items:flex-start;gap:20px;padding:8px 0;overflow-x:auto;">
-      <table class="ls-table" style="font-size:11px;flex-shrink:0;">
+    <div style="display:flex;align-items:flex-start;gap:16px;padding:8px 0;">
+      <table class="ls-table" style="font-size:11px;flex-shrink:0;width:auto;">
         <thead><tr>
           <th style="text-align:left;min-width:50px;">Team</th>
           ${inningNums}
@@ -4037,13 +4036,21 @@ async function fetchBoxscore(){
 
 function toET(timeStr){
   if(!timeStr) return '—';
-  // Already has ET or AM/PM — just return as-is
-  if(timeStr.includes('ET') || timeStr.match(/[AP]M/)) return timeStr;
+  // Strip any existing timezone label (CDT, CST, ET, PDT etc) and re-parse as ET
+  const stripped = timeStr.replace(/\s*(ET|EST|EDT|CDT|CST|MDT|MST|PDT|PST)$/i, '').trim();
   try {
-    const d = new Date(timeStr);
-    if(isNaN(d)) return timeStr;
-    return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'}) + ' ET';
-  } catch(e){ return timeStr; }
+    // Try parsing as a time like "7:05 PM" by anchoring to today's date
+    const d = new Date('2000-01-01 ' + stripped);
+    if(!isNaN(d)){
+      return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'}) + ' ET';
+    }
+    // Fallback: full ISO or other string
+    const d2 = new Date(timeStr);
+    if(!isNaN(d2)){
+      return d2.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'}) + ' ET';
+    }
+  } catch(e){}
+  return stripped; // Return stripped at minimum
 }
 
 function renderBetTab(p){
@@ -4146,7 +4153,7 @@ function renderBoxscoreTeam(){
       const nameCell = isSub
         ? `<td class="indent">${pl.person?.fullName||'?'} <span style="color:var(--muted);font-size:10px">${pos}</span></td>`
         : `<td>${pl.person?.fullName||'?'} <span style="color:var(--muted);font-size:10px">${pos}</span></td>`;
-      return `<tr>${nameCell}<td>${b.atBats??0}</td><td>${b.runs??0}</td><td>${b.hits??0}</td><td>${b.rbi??0}</td><td>${b.baseOnBalls??0}</td><td>${b.strikeOuts??0}</td><td>${b.avg||'.---'}</td></tr>`;
+      return `<tr>${nameCell}<td>${b.atBats??0}</td><td>${b.runs??0}</td><td>${b.hits??0}</td><td>${b.rbi??0}</td><td>${b.baseOnBalls??0}</td><td>${b.strikeOuts??0}</td></tr>`;
     }).join('');
     const tot = td.teamStats?.batting || {};
     return `<div class="bs-section">
@@ -4240,21 +4247,21 @@ function renderScoring(data){
     const desc = pl.result?.description || '';
     const score = `${awScore}-${hwScore}`;
     const color = teamAbr === p?.tx ? 'var(--accent)' : 'var(--text2)';
-    return `<tr>
-      <td style="color:var(--muted);white-space:nowrap;font-size:10px;">${side==='top'?'▲':'▼'}${inn}</td>
-      <td style="font-weight:700;color:${color}">${teamAbr}</td>
-      <td style="color:var(--muted);text-align:right;font-family:var(--mono);white-space:nowrap;">${score}</td>
-      <td style="font-size:11px;">${desc}</td>
+    return `<tr style="border-bottom:1px solid #f0f0f0;">
+      <td style="padding:10px 10px;color:var(--muted);white-space:nowrap;font-size:11px;font-family:var(--mono);font-weight:600;">${side==='top'?'▲':'▼'}${inn}</td>
+      <td style="padding:10px 10px;font-weight:800;font-size:12px;color:${color};white-space:nowrap;">${teamAbr}</td>
+      <td style="padding:10px 10px;font-family:var(--mono);font-weight:700;font-size:12px;text-align:center;white-space:nowrap;">${score}</td>
+      <td style="padding:10px 10px;font-size:11px;color:var(--text);line-height:1.5;">${desc}</td>
     </tr>`;
   }).join('');
 
   document.getElementById('gm-tab-scoring').innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:12px;">
-      <thead><tr style="border-bottom:1px solid var(--border);">
-        <th style="padding:4px 8px;text-align:left;color:var(--muted);font-size:10px;">Inn</th>
-        <th style="padding:4px 8px;text-align:left;color:var(--muted);font-size:10px;">Team</th>
-        <th style="padding:4px 8px;text-align:right;color:var(--muted);font-size:10px;">Score</th>
-        <th style="padding:4px 8px;text-align:left;color:var(--muted);font-size:10px;">Play</th>
+      <thead><tr style="border-bottom:2px solid var(--border);">
+        <th style="padding:6px 10px;text-align:left;color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;">Inn</th>
+        <th style="padding:6px 10px;text-align:left;color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;">Team</th>
+        <th style="padding:6px 10px;text-align:center;color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;">Score</th>
+        <th style="padding:6px 10px;text-align:left;color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;">Description</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
