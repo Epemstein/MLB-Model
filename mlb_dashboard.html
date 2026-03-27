@@ -3805,7 +3805,7 @@ function renderKellyTracker(){
         <input type="number" value="${d.confirmed?Math.round(d.anchor):''}" placeholder="${Math.round(d.anchor)}"
           style="width:76px;padding:2px 5px;border:1px solid ${d.confirmed?'var(--accent)':'var(--border)'};border-radius:3px;background:var(--bg2);color:${d.confirmed?'var(--accent)':'var(--muted)'};font-size:11px;font-weight:${d.confirmed?'700':'400'};text-align:right;${FONT}"
           onchange="setDayStart('${d.ymd}',this.value)"
-          title="${d.confirmed?'Confirmed — erase to reset':'Auto-calculated'}" />
+          title="${d.confirmed?'Confirmed — erase to use prior close':'Auto-calculated from prior close'}" />
       </td>
       <td style="padding:5px 8px;text-align:right;font-size:11px;color:var(--muted);${FONT}">$${d.atRisk.toFixed(0)}${d.pending?' ('+d.pending+' pend)':''}</td>
       <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:600;color:${pnlC};${FONT}">${pnlStr}</td>
@@ -3839,7 +3839,7 @@ function renderKellyTracker(){
     <div style="width:360px;flex-shrink:0;position:sticky;top:60px;align-self:flex-start;">
       <div style="border:1px solid var(--border);border-radius:6px;overflow:hidden;">
         <div style="background:var(--bg2);padding:8px 12px;font-weight:700;font-size:12px;color:var(--accent);border-bottom:1px solid var(--border);${FONT}">
-          Day Summary <span style="font-size:10px;font-weight:400;color:var(--muted);margin-left:6px;">Erase Start to reset to auto</span>
+          Day Summary <span style="font-size:10px;font-weight:400;color:var(--muted);margin-left:6px;">Erase Start to reset to prior day close</span>
         </div>
         <table style="width:100%;border-collapse:collapse;font-size:12px;${FONT}">
           <thead>
@@ -3861,10 +3861,11 @@ function renderKellyTracker(){
 function setDayStart(ymd, value){
   if(!S._dailyBR) S._dailyBR = {};
   if(value === '' || value === null){
-    // Erased — remove confirmation, revert to auto-calculated closing of prior day
+    // Erased — remove confirmation, revert to closing balance of prior day
     delete S._dailyBR[ymd];
     try { db.collection('bankroll').doc('daily_' + ymd).delete(); } catch(e){}
-    toast('Start reset to auto for ' + ymd);
+    const auto = calcAutoStartBR(ymd);
+    toast('Start reset to $' + Math.round(auto.amount).toLocaleString() + ' (prior close)');
   } else {
     const amount = parseFloat(value);
     if(isNaN(amount) || amount <= 0) return;
