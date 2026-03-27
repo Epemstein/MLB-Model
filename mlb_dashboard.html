@@ -684,9 +684,9 @@ input[type=number] { -moz-appearance:textfield; }
 .gm-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
 /* Linescore table */
 .ls-table { width:100%;border-collapse:collapse;font-size:12px;font-family:var(--mono); }
-.ls-table th { background:#f5f5f5;padding:3px 6px;text-align:center;color:var(--muted);font-weight:600;font-size:10px; }
-.ls-table td { padding:3px 6px;text-align:center;border-bottom:1px solid #f0f0f0; }
-.ls-table td:first-child { text-align:left;font-weight:600;font-size:11px; }
+.ls-table th { background:#f5f5f5;padding:5px 10px;text-align:center;color:var(--muted);font-weight:600;font-size:11px; }
+.ls-table td { padding:5px 10px;text-align:center;border-bottom:1px solid #f0f0f0;font-size:12px; }
+.ls-table td:first-child { text-align:left;font-weight:600;font-size:12px; }
 .ls-table .rhe { font-weight:700;background:#f9f9f9;border-left:2px solid var(--border); }
 /* Box score */
 .bs-section { margin-bottom:20px; }
@@ -3992,15 +3992,15 @@ function renderLinescoreStrip(data){
   const lossName = dec.lossName || '';
   const saveName = dec.saveName || '';
   const decisionHtml = (winName||lossName||saveName) ? `
-    <div style="font-size:10px;line-height:2;flex-shrink:0;border-left:2px solid var(--border);padding-left:14px;min-width:140px;">
-      ${winName ? `<div><b style="color:var(--green)">W:</b> ${winName}</div>` : ''}
-      ${lossName ? `<div><b style="color:var(--red)">L:</b> ${lossName}</div>` : ''}
-      ${saveName ? `<div><b style="color:var(--accent)">SV:</b> ${saveName}</div>` : ''}
+    <div style="font-size:12px;line-height:2;flex-shrink:0;border-left:2px solid var(--border);padding-left:16px;min-width:150px;">
+      ${winName ? `<div><b>W:</b> ${winName}</div>` : ''}
+      ${lossName ? `<div><b>L:</b> ${lossName}</div>` : ''}
+      ${saveName ? `<div><b>SV:</b> ${saveName}</div>` : ''}
     </div>` : '';
 
   document.getElementById('gm-linescore-strip').innerHTML = `
-    <div style="display:flex;align-items:flex-start;gap:16px;padding:8px 0;">
-      <table class="ls-table" style="font-size:10px;flex-shrink:0;width:auto;">
+    <div style="display:flex;align-items:center;justify-content:center;gap:24px;width:100%;">
+      <table class="ls-table" style="flex-shrink:0;width:auto;">
         <thead><tr>
           <th style="text-align:left;min-width:50px;">Team</th>
           ${inningNums}
@@ -4008,13 +4008,13 @@ function renderLinescoreStrip(data){
         </tr></thead>
         <tbody>
           <tr>
-            <td style="${awBold}">${awAbr}${awAbr===betAbr?' ★':''}</td>${awInnings}
+            <td>${awAbr}${awAbr===betAbr?' ★':''}</td>${awInnings}
             <td class="rhe">${away?.runs??'—'}</td>
             <td class="rhe">${away?.hits??'—'}</td>
             <td class="rhe">${away?.errors??'—'}</td>
           </tr>
           <tr>
-            <td style="${hwBold}">${hwAbr}${hwAbr===betAbr?' ★':''}</td>${hwInnings}
+            <td>${hwAbr}${hwAbr===betAbr?' ★':''}</td>${hwInnings}
             <td class="rhe">${home?.runs??'—'}</td>
             <td class="rhe">${home?.hits??'—'}</td>
             <td class="rhe">${home?.errors??'—'}</td>
@@ -4374,8 +4374,8 @@ function renderScoring(data){
       <span onclick="closeGameModal()" style="cursor:pointer;color:var(--muted);font-size:22px;line-height:1;margin-left:16px;">×</span>
     </div>
     <!-- Linescore always visible under header -->
-    <div style="padding:0 20px;border-bottom:1px solid var(--border);height:68px;overflow:hidden;box-sizing:border-box;" id="gm-linescore-strip">
-      <div style="color:var(--muted);font-size:11px;padding:8px 0;">Loading linescore…</div>
+    <div style="padding:0 20px;border-bottom:1px solid var(--border);height:100px;overflow:hidden;box-sizing:border-box;display:flex;align-items:center;" id="gm-linescore-strip">
+      <div style="color:var(--muted);font-size:12px;">Loading linescore…</div>
     </div>
     <div class="gm-tabs">
       <div class="gm-tab active" onclick="switchGameTab('bet',this)">Your Bet</div>
