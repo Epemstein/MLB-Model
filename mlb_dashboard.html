@@ -3933,14 +3933,21 @@ async function fetchGamePk(p){
     _gameModalData.gamePk = gamePk;
     // Store decisions from schedule (hydrate=decisions gives fullName directly)
     const dec = games[0].decisions || {};
-    console.log('[schedule decisions]', JSON.stringify(dec));
     if(dec.winner || dec.loser || dec.save){
       _gameModalData.decisions = {
-        winName: dec.winner?.fullName || '',
-        lossName: dec.loser?.fullName || '',
-        saveName: dec.save?.fullName || ''
+        winName:  dec.winner?.fullName || '',
+        lossName: dec.loser?.fullName  || '',
+        saveName: dec.save?.fullName   || '',
+        winId:    dec.winner?.id || null,
+        lossId:   dec.loser?.id  || null,
+        saveId:   dec.save?.id   || null,
+        winImg:   dec.winner?.id ? `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_120,q_auto:best/v1/people/${dec.winner.id}/headshot/67/current` : '',
+        lossImg:  dec.loser?.id  ? `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_120,q_auto:best/v1/people/${dec.loser.id}/headshot/67/current`  : '',
+        saveImg:  dec.save?.id   ? `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_120,q_auto:best/v1/people/${dec.save.id}/headshot/67/current`   : '',
       };
-      // Render strip immediately if linescore already loaded
+      // Fetch pitcher season stats in parallel, then re-render
+      fetchDecisionStats();
+      // Render strip immediately with names only (stats fill in after)
       if(_gameModalData.linescore) renderLinescoreStrip(_gameModalData.linescore);
     }
     fetchLinescoreStrip(); // load immediately into header
@@ -3970,6 +3977,32 @@ async function fetchLinescoreStrip(){
   } catch(e){ console.error('linescore strip error:', e); }
 }
 
+
+async function fetchDecisionStats(){
+  const dec = _gameModalData.decisions;
+  if(!dec) return;
+  const ids = [
+    {key:'winStat',  id: dec.winId},
+    {key:'lossStat', id: dec.lossId},
+    {key:'saveStat', id: dec.saveId},
+  ].filter(x => x.id);
+  if(!ids.length) return;
+
+  // Fetch all in parallel
+  const results = await Promise.all(ids.map(async ({key, id}) => {
+    try {
+      const res = await fetch(`${PROXY_BASE}/mlb-api/people/${id}?hydrate=stats(group=pitching,type=season,season=2026)`);
+      const data = await res.json();
+      const stats = data.people?.[0]?.stats?.[0]?.splits?.[0]?.stat || {};
+      return {key, stat: stats};
+    } catch(e){ return {key, stat:{}}; }
+  }));
+
+  results.forEach(({key, stat}) => { _gameModalData.decisions[key] = stat; });
+  // Re-render with stats now available
+  if(_gameModalData.linescore) renderLinescoreStrip(_gameModalData.linescore);
+}
+
 function renderLinescoreStrip(data){
   const innings = data.innings || [];
   const away = data.teams?.away;
@@ -3983,23 +4016,35 @@ function renderLinescoreStrip(data){
   const awInnings = innings.map(inn => `<td>${inn.away?.runs ?? '—'}</td>`).join('');
   const hwInnings = innings.map(inn => `<td>${inn.home?.runs ?? '—'}</td>`).join('');
 
-  const awBold = awAbr === betAbr ? 'font-weight:800;color:var(--accent);' : '';
-  const hwBold = hwAbr === betAbr ? 'font-weight:800;color:var(--accent);' : '';
-
   // Get decisions stored from schedule fetch
   const dec = _gameModalData.decisions || {};
   const winName = dec.winName || '';
   const lossName = dec.lossName || '';
   const saveName = dec.saveName || '';
-  const decisionHtml = (winName||lossName||saveName) ? `
-    <div style="font-size:12px;line-height:2;flex-shrink:0;border-left:2px solid var(--border);padding-left:16px;min-width:150px;">
-      ${winName ? `<div><b>W:</b> ${winName}</div>` : ''}
-      ${lossName ? `<div><b>L:</b> ${lossName}</div>` : ''}
-      ${saveName ? `<div><b>SV:</b> ${saveName}</div>` : ''}
+  const dec = _gameModalData.decisions || {};
+
+  function pitcherEntry(label, name, img, stat){
+    if(!name) return '';
+    const w = stat?.wins ?? '';
+    const l = stat?.losses ?? '';
+    const sv = stat?.saves ?? '';
+    const record = label==='W'||label==='L' ? (w!==''&&l!=='' ? ` (${w}-${l})` : '') : (sv!=='' ? ` (${sv} SV)` : '');
+    const photo = img ? `<img src="${img}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;margin-right:8px;flex-shrink:0;" onerror="this.style.display='none'" />` : '';
+    return `<div style="display:flex;align-items:center;margin-bottom:4px;">
+      ${photo}
+      <span style="font-size:11px;"><b>${label}:</b> ${name}<span style="color:var(--muted);font-size:10px;">${record}</span></span>
+    </div>`;
+  }
+
+  const decisionHtml = (dec.winName||dec.lossName||dec.saveName) ? `
+    <div style="flex-shrink:0;border-left:2px solid var(--border);padding-left:16px;">
+      ${pitcherEntry('W',  dec.winName,  dec.winImg,  dec.winStat)}
+      ${pitcherEntry('L',  dec.lossName, dec.lossImg, dec.lossStat)}
+      ${pitcherEntry('SV', dec.saveName, dec.saveImg, dec.saveStat)}
     </div>` : '';
 
   document.getElementById('gm-linescore-strip').innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:center;gap:24px;width:100%;">
+    <div style="display:flex;align-items:center;justify-content:center;gap:24px;width:100%;padding:8px;background:#fff;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.1);">
       <table class="ls-table" style="flex-shrink:0;width:auto;">
         <thead><tr>
           <th style="text-align:left;min-width:50px;">Team</th>
@@ -4008,13 +4053,13 @@ function renderLinescoreStrip(data){
         </tr></thead>
         <tbody>
           <tr>
-            <td>${awAbr}${awAbr===betAbr?' ★':''}</td>${awInnings}
+            <td style="${awAbr===betAbr?'color:var(--accent);font-weight:800;':''}">${awAbr}${awAbr===betAbr?' ★':''}</td>${awInnings}
             <td class="rhe">${away?.runs??'—'}</td>
             <td class="rhe">${away?.hits??'—'}</td>
             <td class="rhe">${away?.errors??'—'}</td>
           </tr>
           <tr>
-            <td>${hwAbr}${hwAbr===betAbr?' ★':''}</td>${hwInnings}
+            <td style="${hwAbr===betAbr?'color:var(--accent);font-weight:800;':''}">${hwAbr}${hwAbr===betAbr?' ★':''}</td>${hwInnings}
             <td class="rhe">${home?.runs??'—'}</td>
             <td class="rhe">${home?.hits??'—'}</td>
             <td class="rhe">${home?.errors??'—'}</td>
@@ -4374,7 +4419,7 @@ function renderScoring(data){
       <span onclick="closeGameModal()" style="cursor:pointer;color:var(--muted);font-size:22px;line-height:1;margin-left:16px;">×</span>
     </div>
     <!-- Linescore always visible under header -->
-    <div style="padding:0 20px;border-bottom:1px solid var(--border);height:100px;overflow:hidden;box-sizing:border-box;display:flex;align-items:center;" id="gm-linescore-strip">
+    <div style="padding:8px 20px;border-bottom:1px solid var(--border);height:116px;overflow:hidden;box-sizing:border-box;display:flex;align-items:center;" id="gm-linescore-strip">
       <div style="color:var(--muted);font-size:12px;">Loading linescore…</div>
     </div>
     <div class="gm-tabs">
