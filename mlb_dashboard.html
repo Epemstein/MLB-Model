@@ -761,6 +761,7 @@ input[type=number] { -moz-appearance:textfield; }
   <button onclick="showPanel('proj-p',this)">🎯 Pitchers</button>
   <button onclick="showPanel('br',this)">💰 Bankroll</button>
   <button onclick="showPanel('teams',this)">🏟 Teams</button>
+  <button onclick="showPanel('baseline',this)">📊 Baseline</button>
   <button onclick="showPanel('standings',this)">🏆 Standings</button>
   <button onclick="showPanel('activity',this)">📜 Activity</button>
   <button onclick="showPanel('tools',this)">🔧 Tools</button>
@@ -959,6 +960,33 @@ input[type=number] { -moz-appearance:textfield; }
 <!-- ══ TOOLS ══ -->
 
 <!-- ══ STANDINGS ══ -->
+<!-- ══ BASELINE ══ -->
+<div id="panel-baseline" class="panel">
+  <div class="api-bar" style="margin-bottom:12px;">
+    <button class="btn bg" onclick="renderBaseline()" style="font-size:11px;padding:6px 10px;">↻ Refresh</button>
+    <span style="font-size:11px;color:var(--muted);margin-left:12px;">Scaled to 162 games. Updates when Standings &amp; Projections are loaded.</span>
+  </div>
+  <div style="overflow-x:auto;">
+    <table id="baseline-table" style="width:100%;border-collapse:collapse;font-size:12px;font-family:var(--mono);">
+      <thead>
+        <tr style="border-bottom:2px solid var(--border);text-align:right;">
+          <th style="text-align:left;padding:6px 10px;color:var(--muted);">Team</th>
+          <th style="padding:6px 10px;color:var(--muted);">GP</th>
+          <th style="padding:6px 10px;color:var(--muted);">G Rem</th>
+          <th style="padding:6px 10px;color:var(--muted);">RoS Hit WAR</th>
+          <th style="padding:6px 10px;color:var(--muted);">RoS Pit WAR</th>
+          <th style="padding:6px 10px;color:var(--muted);">RoS Total WAR</th>
+          <th style="padding:6px 10px;color:var(--muted);">Scale (162/G)</th>
+          <th style="padding:6px 10px;color:var(--muted);">Scaled WAR</th>
+          <th style="padding:6px 10px;color:var(--muted);">vs Avg</th>
+          <th style="padding:6px 10px;color:var(--accent);font-weight:700;">Proj W</th>
+        </tr>
+      </thead>
+      <tbody id="baseline-body"></tbody>
+    </table>
+  </div>
+</div>
+
 <div id="panel-standings" class="panel">
   <div class="api-bar" style="margin-bottom:12px;">
     <button class="btn bg" onclick="fetchStandings()" id="standings-refresh-btn" style="font-size:11px;padding:6px 10px;">↻ Refresh</button>
@@ -2878,6 +2906,7 @@ function showPanel(name,btn){
   if(name==='proj-h')rProjH();
   if(name==='proj-p')rProjP();
   if(name==='br')rBRChart();
+  if(name==='baseline'){renderBaseline();}
   if(name==='standings'){fetchStandings();}
   if(name==='activity'){loadActivityLog();}
 }
@@ -3424,6 +3453,75 @@ async function fetchStandings(){
   } finally {
     btn.textContent = '↻ Refresh'; btn.disabled = false;
   }
+}
+
+function renderBaseline(){
+  const tbody = document.getElementById('baseline-body');
+  if(!tbody) return;
+
+  // Build per-team RoS WAR totals
+  const hitWAR = {}, pitWAR = {};
+  for(const t of TEAMS_30){ hitWAR[t] = 0; pitWAR[t] = 0; }
+  for(const p of PROJ_HITTERS){ if(hitWAR[p.team] != null) hitWAR[p.team] += p.war||0; }
+  for(const p of PROJ_PITCHERS){ if(pitWAR[p.team] != null) pitWAR[p.team] += p.war||0; }
+
+  // Build GP lookup from standings
+  const gpMap = {};
+  for(const t of TEAMS_30) gpMap[t] = 0;
+  try {
+    if(typeof _standingsData !== 'undefined' && _standingsData && _standingsData.length){
+      for(const div of _standingsData){
+        for(const tr of (div.teamRecords||[])){
+          const abr = MLB_ID_TO_ABR[tr.team?.id] || tr.team?.abbreviation;
+          if(abr && gpMap[abr] != null) gpMap[abr] = (tr.wins||0) + (tr.losses||0);
+        }
+      }
+    }
+  } catch(e){}
+
+  // Compute scaled WAR and proj wins
+  const rows = TEAMS_30.map(t => {
+    const ros = (hitWAR[t]||0) + (pitWAR[t]||0);
+    const gp = gpMap[t];
+    const gRem = gp > 0 ? (162 - gp) : 162;
+    const scale = 162 / Math.max(gRem, 1);
+    const scaled = ros * scale;
+    return { t, gp, gRem, hitW: hitWAR[t]||0, pitW: pitWAR[t]||0, ros, scale, scaled };
+  });
+
+  const avg = rows.reduce((s,r) => s + r.scaled, 0) / rows.length;
+  rows.sort((a,b) => b.scaled - a.scaled);
+
+  const fmt = (v, dec=2) => v.toFixed(dec);
+  const sign = v => (v >= 0 ? '+' : '') + fmt(v);
+  const col = v => v > 0 ? 'var(--green)' : v < 0 ? 'var(--red)' : 'var(--muted)';
+
+  tbody.innerHTML = rows.map((r, i) => {
+    const vsAvg = r.scaled - avg;
+    const projW = 81 + vsAvg * 1.15;
+    const bg = i % 2 === 0 ? '' : 'background:rgba(255,255,255,.02)';
+    return `<tr style="${bg}">
+      <td style="padding:6px 10px;font-weight:700;color:var(--accent);text-align:left;">${r.t}</td>
+      <td style="padding:6px 10px;text-align:right;color:var(--muted);">${r.gp}</td>
+      <td style="padding:6px 10px;text-align:right;color:var(--muted);">${r.gRem}</td>
+      <td style="padding:6px 10px;text-align:right;">${fmt(r.hitW)}</td>
+      <td style="padding:6px 10px;text-align:right;">${fmt(r.pitW)}</td>
+      <td style="padding:6px 10px;text-align:right;font-weight:600;">${fmt(r.ros)}</td>
+      <td style="padding:6px 10px;text-align:right;color:var(--muted);">${fmt(r.scale)}x</td>
+      <td style="padding:6px 10px;text-align:right;font-weight:600;">${fmt(r.scaled)}</td>
+      <td style="padding:6px 10px;text-align:right;color:${col(vsAvg)};">${sign(vsAvg)}</td>
+      <td style="padding:6px 10px;text-align:right;font-weight:700;color:var(--accent);">${fmt(projW, 1)}</td>
+    </tr>`;
+  }).join('');
+
+  // Footer: league avg
+  tbody.innerHTML += `<tr style="border-top:2px solid var(--border);font-weight:700;">
+    <td style="padding:6px 10px;text-align:left;color:var(--muted);">LG AVG</td>
+    <td colspan="6"></td>
+    <td style="padding:6px 10px;text-align:right;">${fmt(avg)}</td>
+    <td style="padding:6px 10px;text-align:right;">+0.00</td>
+    <td style="padding:6px 10px;text-align:right;color:var(--accent);">81.0</td>
+  </tr>`;
 }
 
 function renderStandings(){
