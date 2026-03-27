@@ -1785,7 +1785,7 @@ function modelCalc(g){
         if(!ov) return p;
         // war162 already computed when override was created via findHitter
         const war162 = ov.war162 != null ? ov.war162
-          : (()=>{ const ovP = PROJ_HITTERS.find(h=>h.name===ov.name)||p; return ovP.g>0?(ovP.pa/ovP.g)*(ovP.pa>0?ovP.war/ovP.pa:0)*162:0; })();
+          : (()=>{ const fh = findHitter(teamName, ov.name); return fh ? fh.war162 : 0; })();
         return {...p, name:ov.name, war:ov.war, war162};
       });
     }
@@ -2420,12 +2420,11 @@ function openSwapModal(gid, team, side, slotIdx){
   document.getElementById('swap-title').textContent = `Swap ${current?.name||'Player'} — ${team} Roster`;
   document.getElementById('swap-search').value = '';
 
-  // Build candidate list: all hitters on that team not already in lineup
-  const td = TEAM_DATA[team]||{};
+  // Build candidate list from PROJ_HITTERS (team-filtered) — avoids name collision bug
   const inLineup = new Set(lu.map(p=>p.name));
-  const bench = (td.hitters||[])
-    .filter(p=>p.war>0 || p.s600>0)
-    .sort((a,b)=>b.s600-a.s600);
+  const bench = PROJ_HITTERS.filter(p=>p.team===team)
+    .map(p=>({...p, war162: p.g>0?(p.pa/p.g)*(p.pa>0?p.war/p.pa:0)*162:0, s600: p.g>0?(p.pa/p.g)*(p.pa>0?p.war/p.pa:0)*162:0}))
+    .sort((a,b)=>b.war162-a.war162);
 
   renderSwapList(bench, inLineup, current);
   document.getElementById('swap-modal').style.display = 'flex';
@@ -2454,15 +2453,14 @@ function renderSwapList(players, inLineup, current){
 function filterSwapList(){
   if(!swapCtx) return;
   const q = document.getElementById('swap-search').value.toLowerCase();
-  const td = TEAM_DATA[swapCtx.team]||{};
   const g = S.games.find(g=>String(g.id)===String(swapCtx.gid));
   const r = modelCalc(g);
   const lu = swapCtx.side==='aw' ? r.awLu : r.hwLu;
   const inLineup = new Set(lu.map(p=>p.name));
   const current = lu[swapCtx.slotIdx];
-  const bench = (td.hitters||[])
-    .filter(p=>!q || p.name.toLowerCase().includes(q))
-    .sort((a,b)=>b.s600-a.s600);
+  const bench = PROJ_HITTERS.filter(p=>p.team===swapCtx.team && (!q || p.name.toLowerCase().includes(q)))
+    .map(p=>({...p, war162: p.g>0?(p.pa/p.g)*(p.pa>0?p.war/p.pa:0)*162:0, s600: p.g>0?(p.pa/p.g)*(p.pa>0?p.war/p.pa:0)*162:0}))
+    .sort((a,b)=>b.war162-a.war162);
   renderSwapList(bench, inLineup, current);
 }
 
@@ -2495,7 +2493,10 @@ function doSwap(playerName, s600, war){
     const orig     = existing?.original  || (existing && !existing.manual ? existing.name  : null);
     const origS600 = existing?.origS600  || (existing && !existing.manual ? existing.s600  : null);
     const origWar  = existing?.origWar   || (existing && !existing.manual ? existing.war   : null);
-    g.lineupOverrides[key] = {name: playerName, s600, war, manual: true, original: orig, origS600, origWar};
+    const _proj = findHitter(swapCtx.team, playerName);
+    const war162 = _proj ? _proj.war162 : 0;
+    const warFinal = _proj ? _proj.war : war;
+    g.lineupOverrides[key] = {name: playerName, s600, war: warFinal, war162, manual: true, original: orig, origS600, origWar};
   }
   save();
   logActivity(`Edited ${swapCtx.team} lineup: swapped in ${playerName} for ${outName}`, swapCtx.team);
