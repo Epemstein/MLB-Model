@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>aMLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -3924,21 +3924,24 @@ async function fetchGamePk(p){
     // Convert MM/DD/YYYY to YYYY-MM-DD
     const parts = p.dt.split('/');
     const dateStr = parts.length === 3 ? `${parts[2]}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}` : p.dt;
-    const url = `${PROXY_BASE}/mlb-api/schedule?sportId=1&date=${dateStr}&teamId=${teamId}`;
+    const url = `${PROXY_BASE}/mlb-api/schedule?sportId=1&date=${dateStr}&teamId=${teamId}&hydrate=decisions`;
     const res = await fetch(url);
     const data = await res.json();
     const games = data.dates?.[0]?.games || [];
     if(!games.length) return;
     const gamePk = games[0].gamePk;
     _gameModalData.gamePk = gamePk;
-    // Store decisions from schedule as initial fallback (boxscore will override when loaded)
+    // Store decisions from schedule (hydrate=decisions gives fullName directly)
     const dec = games[0].decisions || {};
+    console.log('[schedule decisions]', JSON.stringify(dec));
     if(dec.winner || dec.loser || dec.save){
       _gameModalData.decisions = {
         winName: dec.winner?.fullName || '',
         lossName: dec.loser?.fullName || '',
         saveName: dec.save?.fullName || ''
       };
+      // Render strip immediately if linescore already loaded
+      if(_gameModalData.linescore) renderLinescoreStrip(_gameModalData.linescore);
     }
     fetchLinescoreStrip(); // load immediately into header
 
@@ -4046,8 +4049,6 @@ async function fetchBoxscore(){
     _gameModalData.boxscore = data;
     // Extract decisions from boxscore — decisions only has {id,link}, look up name from players
     const bd = data.decisions || {};
-    console.log('[decisions] raw:', JSON.stringify(bd));
-    console.log('[decisions] teams.away keys sample:', Object.keys(data.teams?.away?.players||{}).slice(0,3));
     if(bd.winner || bd.loser || bd.save){
       // Build a flat id->fullName map from all players in both teams
       const allPlayers = {
