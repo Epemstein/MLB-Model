@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>v12 MLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -658,9 +658,11 @@ input[type=number] { -moz-appearance:textfield; }
   align-items:center;justify-content:center;
 }
 #game-modal {
-  background:#fff;border-radius:10px;width:min(820px,96vw);max-height:92vh;
-  overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,.3);
+  background:#fff;border-radius:10px;width:min(860px,96vw);
+  max-height:92vh;display:flex;flex-direction:column;
+  box-shadow:0 16px 48px rgba(0,0,0,.3);
 }
+.gm-body { padding:20px;overflow-y:auto;flex:1;min-height:320px;max-height:480px; }
 .gm-header {
   display:flex;align-items:center;justify-content:space-between;
   padding:16px 20px;border-bottom:1px solid var(--border);
@@ -699,6 +701,11 @@ input[type=number] { -moz-appearance:textfield; }
 .bs-table tr.pitcher-win td:first-child::after { content:' W';color:var(--green);font-size:9px;font-weight:700; }
 .bs-table tr.pitcher-loss td:first-child::after { content:' L';color:var(--red);font-size:9px;font-weight:700; }
 .bs-table tr.pitcher-save td:first-child::after { content:' SV';color:var(--accent);font-size:9px;font-weight:700; }
+.bs-table tr.pitcher-hold td:first-child::after { content:' H';color:var(--yellow);font-size:9px;font-weight:700; }
+.bs-table td.indent { padding-left:20px; }
+.gm-team-toggle { display:flex;gap:6px;margin-bottom:12px; }
+.gm-team-toggle button { padding:4px 12px;font-size:11px;font-weight:600;border-radius:4px;cursor:pointer;border:1px solid var(--border2);background:#fff;color:var(--text2); }
+.gm-team-toggle button.active { background:var(--accent);color:#fff;border-color:var(--accent); }
 /* Bet info panel */
 .bet-info-grid { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
 .bet-info-item { background:#f8f9fa;border-radius:6px;padding:10px 14px; }
@@ -3858,11 +3865,9 @@ function closeGameModal(){
 function switchGameTab(tab, btn){
   document.querySelectorAll('.gm-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  ['bet','line','box'].forEach(t => {
+  ['bet','box'].forEach(t => {
     document.getElementById('gm-tab-'+t).style.display = t===tab ? '' : 'none';
   });
-  // Lazy load linescore/boxscore on first click
-  if(tab === 'line' && !_gameModalData.linescore) fetchLinescore();
   if(tab === 'box' && !_gameModalData.boxscore) fetchBoxscore();
 }
 
@@ -3874,8 +3879,9 @@ async function openGameModal(pickId){
 
   // Reset tabs
   document.querySelectorAll('.gm-tab').forEach((b,i) => b.classList.toggle('active', i===0));
-  ['line','box'].forEach(t => document.getElementById('gm-tab-'+t).style.display = 'none');
+  document.getElementById('gm-tab-box').style.display = 'none';
   document.getElementById('gm-tab-bet').style.display = '';
+  document.getElementById('gm-linescore-strip').innerHTML = '<div style="color:var(--muted);font-size:11px;padding:8px 0;">Loading linescore…</div>';
 
   // Populate header
   const awAbr = p.ha === '@' ? p.tx : p.opp;
@@ -3919,6 +3925,7 @@ async function fetchGamePk(p){
     if(!games.length) return;
     const gamePk = games[0].gamePk;
     _gameModalData.gamePk = gamePk;
+    fetchLinescoreStrip(); // load immediately into header
 
     // Update score if final
     const g = games[0];
@@ -3931,6 +3938,60 @@ async function fetchGamePk(p){
     document.getElementById('gm-status').textContent = `${p.dt} · ${g.status?.detailedState || ''}`;
     document.getElementById('gm-venue').textContent = g.venue?.name || '';
   } catch(e){ console.error('fetchGamePk error:', e); }
+}
+
+
+async function fetchLinescoreStrip(){
+  const pk = _gameModalData.gamePk;
+  if(!pk) return;
+  try {
+    const res = await fetch(`${PROXY_BASE}/mlb-api/game/${pk}/linescore`);
+    const data = await res.json();
+    _gameModalData.linescore = data;
+    renderLinescoreStrip(data);
+  } catch(e){ console.error('linescore strip error:', e); }
+}
+
+function renderLinescoreStrip(data){
+  const innings = data.innings || [];
+  const away = data.teams?.away;
+  const home = data.teams?.home;
+  const p = _gameModalPick;
+  const awAbr = p?.ha === '@' ? p.tx : p.opp;
+  const hwAbr = p?.ha === 'vs' ? p.tx : p.opp;
+  const betAbr = p?.tx;
+
+  const inningNums = innings.map((_,i) => `<th>${i+1}</th>`).join('');
+  const awInnings = innings.map(inn => `<td>${inn.away?.runs ?? '—'}</td>`).join('');
+  const hwInnings = innings.map(inn => `<td>${inn.home?.runs ?? '—'}</td>`).join('');
+
+  const awBold = awAbr === betAbr ? 'font-weight:800;color:var(--accent);' : '';
+  const hwBold = hwAbr === betAbr ? 'font-weight:800;color:var(--accent);' : '';
+
+  document.getElementById('gm-linescore-strip').innerHTML = `
+    <div style="overflow-x:auto;padding:8px 0;">
+      <table class="ls-table" style="font-size:11px;">
+        <thead><tr>
+          <th style="text-align:left;min-width:50px;">Team</th>
+          ${inningNums}
+          <th class="rhe">R</th><th class="rhe">H</th><th class="rhe">E</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td style="${awBold}">${awAbr}${awAbr===betAbr?' ★':''}</td>${awInnings}
+            <td class="rhe">${away?.runs??'—'}</td>
+            <td class="rhe">${away?.hits??'—'}</td>
+            <td class="rhe">${away?.errors??'—'}</td>
+          </tr>
+          <tr>
+            <td style="${hwBold}">${hwAbr}${hwAbr===betAbr?' ★':''}</td>${hwInnings}
+            <td class="rhe">${home?.runs??'—'}</td>
+            <td class="rhe">${home?.hits??'—'}</td>
+            <td class="rhe">${home?.errors??'—'}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
 }
 
 async function fetchLinescore(){
@@ -3959,51 +4020,38 @@ async function fetchBoxscore(){
   } catch(e){ tab.innerHTML = '<div style="color:var(--red);padding:20px;">Failed to load box score</div>'; }
 }
 
+function toET(timeStr){
+  if(!timeStr) return '—';
+  try {
+    if(timeStr.includes('ET')) return timeStr;
+    const d = new Date(timeStr);
+    return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'}) + ' ET';
+  } catch(e){ return timeStr; }
+}
+
 function renderBetTab(p){
   const risk = p.un || 1;
   const won = p.uw != null ? p.uw : 0;
   const edge = p.ed != null ? p.ed : 0;
-  const kuRisk = p.ku ? (p.ku * (Math.abs(p.od) > 100 ? Math.abs(p.od)/100 : 1)).toFixed(2) : '—';
   const wc = won > 0 ? 'var(--green)' : won < 0 ? 'var(--red)' : 'var(--muted)';
-  const ec = edge > 0 ? 'var(--green)' : edge < 0 ? 'var(--red)' : 'var(--muted)';
+  const kwc = (p.kuw||0) > 0 ? 'var(--green)' : (p.kuw||0) < 0 ? 'var(--red)' : 'var(--muted)';
+  const start = S.br.start || 10000;
+  const kellyWonDollar = p.rs==='Pending' ? '—' : (((p.kuw||0)>=0?'+':'-')+'$'+Math.abs((p.kuw||0)*start/100).toFixed(0));
+  const betOnLine = `<span style="font-weight:800;color:var(--accent);">${p.tx}</span> ${p.ha||'vs'} ${p.opp}`;
   document.getElementById('gm-tab-bet').innerHTML = `
     <div style="margin-bottom:16px;">
-      <div style="font-size:13px;font-weight:700;margin-bottom:4px;">${p.tx} ${p.ha||'vs'} ${p.opp}</div>
-      <div style="font-size:11px;color:var(--muted);">${p.gt||''} · ${p.tp||''}</div>
+      <div style="font-size:14px;margin-bottom:4px;">Bet on: ${betOnLine}</div>
+      <div style="font-size:11px;color:var(--muted);">${toET(p.gt||'')} · Placed: ${p.tp||''}</div>
     </div>
     <div class="bet-info-grid">
-      <div class="bet-info-item">
-        <div class="bet-info-label">Odds</div>
-        <div class="bet-info-value">${p.od>0?'+':''}${p.od}</div>
-      </div>
-      <div class="bet-info-item">
-        <div class="bet-info-label">Edge</div>
-        <div class="bet-info-value" style="color:${ec}">${edge>=0?'+':''}${edge.toFixed(1)}%</div>
-      </div>
-      <div class="bet-info-item">
-        <div class="bet-info-label">xWP</div>
-        <div class="bet-info-value">${p.xwp?p.xwp.toFixed(1)+'%':'—'}</div>
-      </div>
-      <div class="bet-info-item">
-        <div class="bet-info-label">Result</div>
-        <div class="bet-info-value" style="color:${p.rs==='Win'?'var(--green)':p.rs==='Loss'?'var(--red)':'var(--muted)'}">${p.rs}</div>
-      </div>
-      <div class="bet-info-item">
-        <div class="bet-info-label">Risk (Flat)</div>
-        <div class="bet-info-value">${risk.toFixed(2)}u</div>
-      </div>
-      <div class="bet-info-item">
-        <div class="bet-info-label">Won (Flat)</div>
-        <div class="bet-info-value" style="color:${wc}">${p.rs==='Pending'?'—':(won>=0?'+':'')+won.toFixed(2)+'u'}</div>
-      </div>
-      <div class="bet-info-item">
-        <div class="bet-info-label">Kelly %</div>
-        <div class="bet-info-value">${p.ku?p.ku.toFixed(2)+'%':'—'}</div>
-      </div>
-      <div class="bet-info-item">
-        <div class="bet-info-label">Kelly Won</div>
-        <div class="bet-info-value" style="color:${(p.kuw||0)>0?'var(--green)':(p.kuw||0)<0?'var(--red)':'var(--muted)'}">${p.rs==='Pending'?'—':((p.kuw||0)>=0?'+':'')+((p.kuw||0)).toFixed(2)+'u'}</div>
-      </div>
+      <div class="bet-info-item"><div class="bet-info-label">Odds</div><div class="bet-info-value">${p.od>0?'+':''}${p.od}</div></div>
+      <div class="bet-info-item"><div class="bet-info-label">Edge</div><div class="bet-info-value">${edge>=0?'+':''}${edge.toFixed(1)}%</div></div>
+      <div class="bet-info-item"><div class="bet-info-label">xWP</div><div class="bet-info-value">${p.xwp?p.xwp.toFixed(1)+'%':'—'}</div></div>
+      <div class="bet-info-item"><div class="bet-info-label">Result</div><div class="bet-info-value" style="color:${p.rs==='Win'?'var(--green)':p.rs==='Loss'?'var(--red)':'var(--muted)'}">${p.rs}</div></div>
+      <div class="bet-info-item"><div class="bet-info-label">Risk</div><div class="bet-info-value">${risk.toFixed(2)}u</div></div>
+      <div class="bet-info-item"><div class="bet-info-label">Won (Flat)</div><div class="bet-info-value" style="color:${wc}">${p.rs==='Pending'?'—':(won>=0?'+':'')+won.toFixed(2)+'u'}</div></div>
+      <div class="bet-info-item"><div class="bet-info-label">Kelly %</div><div class="bet-info-value">${p.ku?p.ku.toFixed(2)+'%':'—'}</div></div>
+      <div class="bet-info-item"><div class="bet-info-label">Kelly Won ($)</div><div class="bet-info-value" style="color:${kwc}">${kellyWonDollar}</div></div>
     </div>`;
 }
 
@@ -4044,76 +4092,96 @@ function renderLinescore(data){
     </div>`;
 }
 
-function renderBoxscore(data){
+let _boxTeam = 'away';
+function switchBoxTeam(side, btn){
+  _boxTeam = side;
+  document.querySelectorAll('.gm-team-toggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderBoxscoreTeam();
+}
+
+function renderBoxscoreTeam(){
+  const data = _gameModalData.boxscore;
+  if(!data) return;
   const teams = data.teams || {};
-  const awAbr = _gameModalPick?.ha === '@' ? _gameModalPick.tx : _gameModalPick.opp;
-  const hwAbr = _gameModalPick?.ha === 'vs' ? _gameModalPick.tx : _gameModalPick.opp;
+  const p = _gameModalPick;
+  const awAbr = p?.ha === '@' ? p.tx : p.opp;
+  const hwAbr = p?.ha === 'vs' ? p.tx : p.opp;
+  const teamData = _boxTeam === 'away' ? teams.away : teams.home;
+  const abr = _boxTeam === 'away' ? awAbr : hwAbr;
 
-  function battingTable(teamData, abr){
-    const players = Object.values(teamData.players || {})
-      .filter(p => p.stats?.batting && p.battingOrder)
-      .sort((a,b) => (a.battingOrder||999) - (b.battingOrder||999));
-    const rows = players.map(p => {
-      const b = p.stats.batting;
-      const pos = p.position?.abbreviation || '';
-      return `<tr>
-        <td>${p.person?.fullName||'?'} <span style="color:var(--muted);font-size:10px">${pos}</span></td>
-        <td>${b.atBats??0}</td><td>${b.runs??0}</td><td>${b.hits??0}</td>
-        <td>${b.rbi??0}</td><td>${b.baseOnBalls??0}</td><td>${b.strikeOuts??0}</td>
-        <td>${b.avg||'.000'}</td>
-      </tr>`;
+  // Get W/L/SV/H pitcher IDs from decisions
+  const decisions = data.decisions || {};
+  const winId = decisions.winner?.id;
+  const lossId = decisions.loser?.id;
+  const saveId = decisions.save?.id;
+
+  function battingTable(td, ab){
+    const players = Object.values(td.players || {})
+      .filter(pl => pl.stats?.batting && pl.battingOrder)
+      .sort((a,b) => parseInt(a.battingOrder||9999) - parseInt(b.battingOrder||9999));
+    const rows = players.map(pl => {
+      const b = pl.stats.batting;
+      const pos = pl.position?.abbreviation || '';
+      // Sub = battingOrder ends in non-zero (100=starter, 101=first sub, etc.)
+      const order = parseInt(pl.battingOrder||0);
+      const isSub = order % 100 !== 0;
+      const nameCell = isSub
+        ? `<td class="indent">${pl.person?.fullName||'?'} <span style="color:var(--muted);font-size:10px">${pos}</span></td>`
+        : `<td>${pl.person?.fullName||'?'} <span style="color:var(--muted);font-size:10px">${pos}</span></td>`;
+      return `<tr>${nameCell}<td>${b.atBats??0}</td><td>${b.runs??0}</td><td>${b.hits??0}</td><td>${b.rbi??0}</td><td>${b.baseOnBalls??0}</td><td>${b.strikeOuts??0}</td><td>${b.avg||'.---'}</td></tr>`;
     }).join('');
-    const tot = teamData.teamStats?.batting || {};
-    return `
-      <div class="bs-section">
-        <div class="bs-title">${abr} Batting</div>
-        <table class="bs-table">
-          <thead><tr><th>Player</th><th>AB</th><th>R</th><th>H</th><th>RBI</th><th>BB</th><th>SO</th><th>AVG</th></tr></thead>
-          <tbody>
-            ${rows}
-            <tr class="totals"><td>Totals</td><td>${tot.atBats??0}</td><td>${tot.runs??0}</td><td>${tot.hits??0}</td><td>${tot.rbi??0}</td><td>${tot.baseOnBalls??0}</td><td>${tot.strikeOuts??0}</td><td></td></tr>
-          </tbody>
-        </table>
-      </div>`;
+    const tot = td.teamStats?.batting || {};
+    return `<div class="bs-section">
+      <div class="bs-title">${ab} Batting</div>
+      <table class="bs-table">
+        <thead><tr><th>Player</th><th>AB</th><th>R</th><th>H</th><th>RBI</th><th>BB</th><th>SO</th><th>AVG</th></tr></thead>
+        <tbody>${rows}
+          <tr class="totals"><td>Totals</td><td>${tot.atBats??0}</td><td>${tot.runs??0}</td><td>${tot.hits??0}</td><td>${tot.rbi??0}</td><td>${tot.baseOnBalls??0}</td><td>${tot.strikeOuts??0}</td><td></td></tr>
+        </tbody>
+      </table></div>`;
   }
 
-  function pitchingTable(teamData, abr){
-    const info = data.info || [];
-    const winInfo = info.find(i => i.label === 'WP');
-    const lossInfo = info.find(i => i.label === 'LP');
-    const saveInfo = info.find(i => i.label === 'Sv');
-    const pitchers = Object.values(teamData.players || {})
-      .filter(p => p.stats?.pitching && p.stats.pitching.inningsPitched)
-      .sort((a,b) => parseFloat(a.stats.pitching.inningsPitched||0) < parseFloat(b.stats.pitching.inningsPitched||0) ? 1 : -1);
-    const rows = pitchers.map(p => {
-      const pt = p.stats.pitching;
-      const name = p.person?.fullName||'?';
+  function pitchingTable(td, ab){
+    const pitchers = Object.values(td.players || {})
+      .filter(pl => pl.stats?.pitching && pl.stats.pitching.inningsPitched && parseFloat(pl.stats.pitching.inningsPitched) > 0)
+      .sort((a,b) => (a.pitchingOrder||99) - (b.pitchingOrder||99));
+    const rows = pitchers.map(pl => {
+      const pt = pl.stats.pitching;
+      const id = pl.person?.id;
       let cls = '';
-      if(winInfo?.value?.includes(name.split(' ').pop())) cls = 'pitcher-win';
-      else if(lossInfo?.value?.includes(name.split(' ').pop())) cls = 'pitcher-loss';
-      else if(saveInfo?.value?.includes(name.split(' ').pop())) cls = 'pitcher-save';
-      return `<tr class="${cls}">
-        <td>${name}</td>
-        <td>${pt.inningsPitched||0}</td><td>${pt.hits??0}</td><td>${pt.runs??0}</td>
-        <td>${pt.earnedRuns??0}</td><td>${pt.baseOnBalls??0}</td><td>${pt.strikeOuts??0}</td>
-        <td>${pt.era||'—'}</td>
-      </tr>`;
+      if(id && id === winId) cls = 'pitcher-win';
+      else if(id && id === lossId) cls = 'pitcher-loss';
+      else if(id && id === saveId) cls = 'pitcher-save';
+      else if(pt.holds > 0) cls = 'pitcher-hold';
+      return `<tr class="${cls}"><td>${pl.person?.fullName||'?'}</td><td>${pt.inningsPitched||0}</td><td>${pt.hits??0}</td><td>${pt.runs??0}</td><td>${pt.earnedRuns??0}</td><td>${pt.baseOnBalls??0}</td><td>${pt.strikeOuts??0}</td><td>${pt.era||'—'}</td></tr>`;
     }).join('');
-    return `
-      <div class="bs-section">
-        <div class="bs-title">${abr} Pitching</div>
-        <table class="bs-table">
-          <thead><tr><th>Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>SO</th><th>ERA</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>`;
+    return `<div class="bs-section">
+      <div class="bs-title">${ab} Pitching</div>
+      <table class="bs-table">
+        <thead><tr><th>Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>SO</th><th>ERA</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>`;
   }
 
-  document.getElementById('gm-tab-box').innerHTML =
-    battingTable(teams.away||{}, awAbr) +
-    pitchingTable(teams.away||{}, awAbr) +
-    battingTable(teams.home||{}, hwAbr) +
-    pitchingTable(teams.home||{}, hwAbr);
+  const awInfo = TEAM_INFO[awAbr]||{primary:'#333'};
+  const hwInfo = TEAM_INFO[hwAbr]||{primary:'#333'};
+  document.getElementById('gm-tab-box').innerHTML = `
+    <div class="gm-team-toggle">
+      <button class="${_boxTeam==='away'?'active':''}" onclick="switchBoxTeam('away',this)" style="${_boxTeam==='away'?'background:'+awInfo.primary+';border-color:'+awInfo.primary:''}">
+        <img src="${teamLogo(awAbr)}" width="14" height="14" style="vertical-align:middle;margin-right:4px;object-fit:contain;" onerror="this.style.display='none'" />${awAbr}
+      </button>
+      <button class="${_boxTeam==='home'?'active':''}" onclick="switchBoxTeam('home',this)" style="${_boxTeam==='home'?'background:'+hwInfo.primary+';border-color:'+hwInfo.primary:''}">
+        <img src="${teamLogo(hwAbr)}" width="14" height="14" style="vertical-align:middle;margin-right:4px;object-fit:contain;" onerror="this.style.display='none'" />${hwAbr}
+      </button>
+    </div>
+    ${battingTable(teamData, abr)}
+    ${pitchingTable(teamData, abr)}`;
+}
+
+function renderBoxscore(data){
+  _boxTeam = 'away';
+  renderBoxscoreTeam();
 }
 </script>
 
@@ -4160,30 +4228,34 @@ function renderBoxscore(data){
 <!-- ══ GAME RESULT MODAL ══ -->
 <div id="game-modal-overlay" onclick="if(event.target===this)closeGameModal()">
   <div id="game-modal">
+    <!-- Score header -->
     <div class="gm-header">
       <div class="gm-score-block" id="gm-score-block">
         <div class="gm-team" id="gm-away-team"></div>
-        <div>
-          <div style="text-align:center;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;" id="gm-status"></div>
+        <div style="text-align:center;">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;" id="gm-status"></div>
           <div style="display:flex;align-items:center;gap:8px;">
             <div class="gm-score" id="gm-away-score">—</div>
             <div class="gm-score-sep">-</div>
             <div class="gm-score" id="gm-home-score">—</div>
           </div>
-          <div style="text-align:center;font-size:10px;color:var(--muted);margin-top:4px;" id="gm-venue"></div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px;" id="gm-venue"></div>
         </div>
         <div class="gm-team" id="gm-home-team"></div>
       </div>
       <span onclick="closeGameModal()" style="cursor:pointer;color:var(--muted);font-size:22px;line-height:1;margin-left:16px;">×</span>
     </div>
+    <!-- Linescore always visible under header -->
+    <div style="padding:0 20px 12px;border-bottom:1px solid var(--border);overflow-x:auto;" id="gm-linescore-strip">
+      <div style="color:var(--muted);font-size:11px;padding:8px 0;">Loading linescore…</div>
+    </div>
+    <!-- Tabs: Your Bet | Box Score only -->
     <div class="gm-tabs">
       <div class="gm-tab active" onclick="switchGameTab('bet',this)">Your Bet</div>
-      <div class="gm-tab" onclick="switchGameTab('line',this)">Linescore</div>
       <div class="gm-tab" onclick="switchGameTab('box',this)">Box Score</div>
     </div>
     <div class="gm-body">
       <div id="gm-tab-bet"></div>
-      <div id="gm-tab-line" style="display:none"></div>
       <div id="gm-tab-box" style="display:none"></div>
     </div>
   </div>
