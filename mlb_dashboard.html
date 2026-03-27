@@ -4046,6 +4046,8 @@ async function fetchBoxscore(){
     _gameModalData.boxscore = data;
     // Extract decisions from boxscore — decisions only has {id,link}, look up name from players
     const bd = data.decisions || {};
+    console.log('[decisions] raw:', JSON.stringify(bd));
+    console.log('[decisions] teams.away keys sample:', Object.keys(data.teams?.away?.players||{}).slice(0,3));
     if(bd.winner || bd.loser || bd.save){
       // Build a flat id->fullName map from all players in both teams
       const allPlayers = {
