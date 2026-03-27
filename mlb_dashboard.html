@@ -3740,7 +3740,7 @@ function renderKellyTracker(){
   const daySummaries = dates.map(ymd=>{
     const dayPicks=sorted.filter(p=>(p.dt.includes('/')?dateToYMD(p.dt):p.dt)===ymd);
     const confirmed=!!(S._dailyBR&&S._dailyBR[ymd]&&S._dailyBR[ymd].confirmed);
-    const anchor=confirmed?S._dailyBR[ymd].start:base;
+    const anchor=confirmed?S._dailyBR[ymd].start:calcAutoStartBR(ymd).amount;
     const atRisk=dayPicks.reduce((s,p)=>{
       const actual=(p._kellyActual!=null&&p._kellyActual!=='')?parseFloat(p._kellyActual):null;
       const recKuPct=p.ku?Math.min(p.ku*(S.br.kelly||0.5),S.br.maxPct||3):0;
@@ -3759,7 +3759,7 @@ function renderKellyTracker(){
     const ymd=p.dt.includes('/')?dateToYMD(p.dt):p.dt;
     const di=dateIndexMap[ymd]||0;
     const rowBg=di%2===0?'':'background:rgba(150,150,150,.07);';
-    const anchor=(S._dailyBR&&S._dailyBR[ymd]&&S._dailyBR[ymd].confirmed)?S._dailyBR[ymd].start:base;
+    const anchor=(S._dailyBR&&S._dailyBR[ymd]&&S._dailyBR[ymd].confirmed)?S._dailyBR[ymd].start:calcAutoStartBR(ymd).amount;
     const recKuPct=p.ku?Math.min(p.ku*(S.br.kelly||0.5),S.br.maxPct||3):0;
     const recDollar=recKuPct>0?recKuPct/100*anchor:0;
     const actualVal=(p._kellyActual!=null&&p._kellyActual!=='')?parseFloat(p._kellyActual):'';
