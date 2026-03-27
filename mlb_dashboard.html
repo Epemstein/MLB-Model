@@ -1136,12 +1136,14 @@ function calcAllProjWins(){
     const td = TEAM_DATA[t] || {};
     // Try to get games played from live standings
     let gp = 0;
-    if(_standingsData && _standingsData.length){
-      for(const div of _standingsData){
-        const tr = (div.teamRecords||[]).find(r => (MLB_ID_TO_ABR[r.team?.id]||r.team?.abbreviation) === t);
-        if(tr){ gp = (tr.wins||0) + (tr.losses||0); break; }
+    try {
+      if(typeof _standingsData !== 'undefined' && _standingsData && _standingsData.length){
+        for(const div of _standingsData){
+          const tr = (div.teamRecords||[]).find(r => (MLB_ID_TO_ABR[r.team?.id]||r.team?.abbreviation) === t);
+          if(tr){ gp = (tr.wins||0) + (tr.losses||0); break; }
+        }
       }
-    }
+    } catch(e){ /* standings not yet initialized */ }
     let gRem = gp > 0 ? (162 - gp) : (td.games_remaining || 162);
     if(gRem <= 0) gRem = 1; // safety
     // scale: RoS WAR is for ~gRem games, normalize to 162
