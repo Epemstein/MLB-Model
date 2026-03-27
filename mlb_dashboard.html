@@ -770,16 +770,6 @@ input[type=number] { -moz-appearance:textfield; }
 
 <main>
 
-<!-- ══ DAILY BR BANNER ══ -->
-<div id="daily-br-banner" style="display:none;position:fixed;top:48px;left:0;right:0;z-index:9000;background:linear-gradient(90deg,#1a3a5c,#2c5282);padding:10px 20px;display:none;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.3);">
-  <span style="font-size:13px;color:#fff;font-weight:600;">📅 Today's starting bankroll:</span>
-  <span id="daily-br-calc" style="font-size:15px;color:var(--accent);font-weight:700;">$10,000</span>
-  <input type="number" id="daily-br-input" style="width:110px;padding:4px 8px;border-radius:4px;border:1px solid var(--accent);background:#1a3a5c;color:#fff;font-size:13px;font-weight:600;" />
-  <button onclick="confirmDailyBR()" style="padding:5px 14px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:700;font-size:12px;">✓ Confirm</button>
-  <button onclick="dismissDailyBR()" style="padding:5px 10px;background:transparent;color:#aaa;border:1px solid #444;border-radius:4px;cursor:pointer;font-size:11px;">Later</button>
-  <span style="margin-left:auto;font-size:11px;color:#aaa;" id="daily-br-note">Based on yesterday's closing balance</span>
-</div>
-
 <!-- ══ GAMES ══ -->
 <div id="panel-games" class="panel active">
 
@@ -867,17 +857,16 @@ input[type=number] { -moz-appearance:textfield; }
   </div>
   <div class="card">
     <div class="ct">Pick Log <span id="p-ct" style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);"></span></div>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:6px;gap:6px;">
-      <button class="fb active" id="ptog-flat" onclick="setPickView('flat',this)">Flat (Units)</button>
-      <button class="fb" id="ptog-kelly" onclick="setPickView('kelly',this)">Kelly (%)</button>
-    </div>
-    <div class="sw"><table class="dt"><thead><tr><th style="width:42px">Bet No.</th><th style="width:28px"></th><th style="width:90px;white-space:nowrap">Placed</th><th style="width:70px">Date</th><th style="width:60px">Pick</th><th style="width:80px">Opp</th><th style="width:90px">Game Time</th><th style="width:60px;text-align:right">Odds</th><th style="width:45px;text-align:right">xWP</th><th style="width:55px;text-align:right">Edge</th><th style="width:55px;text-align:right" id="th-bet">Bet</th><th style="width:60px">Result</th><th style="width:65px;text-align:right" id="th-won">Won</th><th style="width:75px;text-align:right" id="th-run">Running</th><th style="width:28px"></th></tr></thead><tbody id="pb"><tr><td colspan="14" class="nd">No picks yet.</td></tr></tbody></table></div>
+    <div class="sw"><table class="dt"><thead><tr><th style="width:42px">Bet No.</th><th style="width:28px"></th><th style="width:90px;white-space:nowrap">Placed</th><th style="width:70px">Date</th><th style="width:60px">Pick</th><th style="width:80px">Opp</th><th style="width:90px">Game Time</th><th style="width:60px;text-align:right">Odds</th><th style="width:45px;text-align:right">xWP</th><th style="width:55px;text-align:right">Edge</th><th style="width:55px;text-align:right" id="th-bet">Bet</th><th style="width:60px">Result</th><th style="width:65px;text-align:right" id="th-won">Won</th><th style="width:75px;text-align:right" id="th-run">Running</th><th style="width:28px"></th></tr></thead><tbody id="pb"><tr><td colspan="15" class="nd">No picks yet.</td></tr></tbody></table></div>
   </div>
 </div>
 
 <!-- ══ KELLY TRACKER ══ -->
 <div id="panel-kelly-tracker" class="panel">
-  <div id="kelly-tracker-body"></div>
+  <div class="card">
+    <div class="ct">Kelly Tracker <span style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);" id="kelly-ct"></span></div>
+    <div id="kelly-tracker-body"></div>
+  </div>
 </div>
 
 <!-- ══ PERFORMANCE ══ -->
@@ -988,7 +977,6 @@ input[type=number] { -moz-appearance:textfield; }
       <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
         <div style="font-size:10px;color:var(--muted);margin-bottom:4px;">Kelly $ Anchor (today's start)</div>
         <div id="br-kelly-anchor" style="font-size:13px;font-weight:600;color:var(--accent);">—</div>
-        <button onclick="showDailyBRBanner()" style="margin-top:6px;padding:4px 10px;font-size:10px;background:transparent;border:1px solid var(--border2);color:var(--muted);border-radius:4px;cursor:pointer;">⟳ Re-confirm today's start</button>
       </div>
     </div>
   </div>
@@ -2269,35 +2257,19 @@ function updPick(id,rs){
 function rPicks(){
   const b=document.getElementById('pb');
   document.getElementById('p-ct').textContent=S.picks.length+' bet'+(S.picks.length!==1?'s':'');
-  if(!S.picks.length){b.innerHTML='<tr><td colspan="14" class="nd">No picks yet.</td></tr>';return;}
+  if(!S.picks.length){b.innerHTML='<tr><td colspan="15" class="nd">No picks yet.</td></tr>';return;}
   // Pre-calculate running totals forward, then reverse for display
-  let fwdRun = 0, fwdKRun = 0;
+  let fwdRun = 0;
   const runningTotals = S.picks.map(p => {
-    if(p.rs !== 'Pending'){ fwdRun += p.uw; fwdKRun += (p.kuw||0); }
-    return { run: fwdRun, krun: fwdKRun };
+    if(p.rs !== 'Pending'){ fwdRun += p.uw; }
+    return { run: fwdRun };
   });
   b.innerHTML=[...S.picks].map((p,i)=>({p, rt:runningTotals[i]})).reverse().map(({p,rt},i)=>{
-    const run = rt.run, krun = rt.krun;
-    const rc = (_pickView==='kelly'?krun:run)>=0?'var(--green)':'var(--red)';
-    const isKelly = _pickView === 'kelly';
-    const start = S.br.start || 10000;
-    // Use confirmed daily start bankroll for Kelly $ if available, else fall back
-    const kellyAnchor = getTodayStartBR() || start;
-    // Kelly $ recommended for this pick's date
-    const pickDateStart = getDailyStartBR(p.dt) || kellyAnchor;
-    const kellyDollar = p.ku ? (p.ku / 100) * pickDateStart : 0;
-    const kellyRecStr = p.ku && p.ku > 0 ? '$' + kellyDollar.toFixed(0) : '—';
-    const betStr  = isKelly ? (p.ku?p.ku.toFixed(2)+'%':'—') : p.un+'u';
-    const wonVal  = isKelly ? (p.kuw||0)*start/100 : p.uw;
-    const runVal  = isKelly ? krun*start/100 : run;
-    const wonStr  = p.rs==='Pending' ? '—' : isKelly
-      ? (wonVal>=0?'+':'-')+'$'+Math.abs(wonVal).toFixed(0)
-      : (p.uw>=0?'+':'')+p.uw.toFixed(2)+'u';
-    const runStr  = p.rs==='Pending' ? '—' : isKelly
-      ? (runVal>=0?'+':'')+'$'+Math.abs(runVal).toFixed(0)
-      : (run>=0?'+':'')+run.toFixed(2)+'u';
-    const wc = isKelly ? (wonVal>0?'var(--green)':wonVal<0?'var(--red)':'var(--muted)')
-                       : (p.uw>0?'var(--green)':p.uw<0?'var(--red)':'var(--muted)');
+    const run = rt.run;
+    const rc = run>=0?'var(--green)':'var(--red)';
+    const wonStr = p.rs==='Pending' ? '—' : (p.uw>=0?'+':'')+p.uw.toFixed(2)+'u';
+    const runStr = p.rs==='Pending' ? '—' : (run>=0?'+':'')+run.toFixed(2)+'u';
+    const wc = p.uw>0?'var(--green)':p.uw<0?'var(--red)':'var(--muted)';
     return `<tr style="cursor:pointer;" onclick="openGameModal(${p.id})" title="Click to view game details">
       <td style="color:var(--muted);text-align:center">${S.picks.length - i}</td>
       <td style="text-align:center"><button class="btn bg" style="padding:2px 6px;font-size:9px;" onclick="event.stopPropagation();openEditPick(${p.id})">✎</button></td>
@@ -2309,8 +2281,7 @@ function rPicks(){
       <td style="text-align:right">${p.od>0?'+':''}${p.od}</td>
       <td style="color:var(--muted);text-align:right">${p.xwp?p.xwp.toFixed(1)+'%':'—'}</td>
       <td style="color:${p.ed>0?'var(--green)':p.ed<0?'var(--red)':'var(--muted)'};text-align:right">${p.ed>=0?'+':''}${p.ed.toFixed(1)}%</td>
-      <td style="text-align:right;color:var(--accent);font-weight:600;">${kellyRecStr}</td>
-      <td style="text-align:right">${betStr}</td>
+      <td style="text-align:right">${p.un}u</td>
       <td><select style="background:transparent;border:1px solid var(--border);color:${p.rs==='Win'?'var(--green)':p.rs==='Loss'?'var(--red)':'var(--accent)'};font-size:10px;padding:2px 4px;" onchange="updPick(${p.id},this.value)">
         <option value="Pending" ${p.rs==='Pending'?'selected':''}>Pending</option>
         <option value="Win" ${p.rs==='Win'?'selected':''}>Win</option>
@@ -2722,7 +2693,6 @@ function onDateChange(){
       if(snap.exists){ S._dailyBR[date] = snap.data(); updateDailyBRStatusPanel(); }
     }).catch(()=>{});
   }
-  checkDailyBROnLoad();
   updateDailyBRStatusPanel();
 }
 
@@ -2992,47 +2962,23 @@ function calcAutoStartBR(todayYMD){
   return { amount: S.br.start || 10000, basis: 'settings' };
 }
 
-function showDailyBRBanner(){
-  const today = getActiveDate();
-  const existing = S._dailyBR && S._dailyBR[today];
-  if(existing && existing.confirmed) return; // already confirmed, only show via button
+function showDailyBRBanner(){ /* removed — Kelly tab handles this */ }
+function dismissDailyBR(){ /* removed */ }
 
-  const auto = calcAutoStartBR(today);
-  const banner = document.getElementById('daily-br-banner');
-  const calcEl = document.getElementById('daily-br-calc');
-  const inputEl = document.getElementById('daily-br-input');
-  const noteEl = document.getElementById('daily-br-note');
-
-  const amt = auto.amount;
-  calcEl.textContent = '$' + Math.round(amt).toLocaleString();
-  inputEl.value = Math.round(amt);
-  noteEl.textContent = auto.basis === 'settings'
-    ? 'Based on settings (no prior history)'
-    : `Based on closing balance from ${auto.basis}`;
-
-  banner.style.display = 'flex';
-}
-
-function confirmDailyBR(){
-  const today = getActiveDate();
-  const inputEl = document.getElementById('daily-br-input');
-  const amount = parseFloat(inputEl.value) || 10000;
+function confirmDailyBR(ymd, amount){
+  // Called from Kelly tab day summary to set/override a day's starting BR
+  amount = parseFloat(amount);
+  if(isNaN(amount) || amount <= 0) return;
   if(!S._dailyBR) S._dailyBR = {};
-  S._dailyBR[today] = { start: amount, confirmed: true };
-  // Save to Firestore
+  S._dailyBR[ymd] = { start: amount, confirmed: true };
   try {
-    db.collection('bankroll').doc('daily_' + today).set({ start: amount, confirmed: true, date: today });
+    db.collection('bankroll').doc('daily_' + ymd).set({ start: amount, confirmed: true, date: ymd });
   } catch(e){ console.warn('Daily BR Firestore save failed', e); }
   localStorage.setItem('mlb26v3', JSON.stringify(S));
-  document.getElementById('daily-br-banner').style.display = 'none';
+  renderKellyTracker();
   rPerf();
-  rPicks();
-  updateKellyRec();
-  toast('Day start locked: $' + Math.round(amount).toLocaleString());
-}
-
-function dismissDailyBR(){
-  document.getElementById('daily-br-banner').style.display = 'none';
+  updateDailyBRStatusPanel();
+  toast('Start set for ' + ymd + ': $' + Math.round(amount).toLocaleString());
 }
 
 function updateKellyRec(){
@@ -3764,144 +3710,156 @@ function renderKellyTracker(){
   const body = document.getElementById('kelly-tracker-body');
   if(!body) return;
 
-  // Group all picks by date (YYYY-MM-DD), sorted newest first
-  const allPicks = [...S.picks].sort((a,b) => {
-    const ad = a.dt.includes('/') ? dateToYMD(a.dt) : a.dt;
-    const bd = b.dt.includes('/') ? dateToYMD(b.dt) : b.dt;
-    return bd.localeCompare(ad);
+  const unit = S.br.unit || 100;
+  const base = S.br.start || 10000;
+
+  // All picks newest first
+  const sorted = [...S.picks].sort((a,b)=>{
+    const ay = a.dt.includes('/')?dateToYMD(a.dt):a.dt;
+    const by = b.dt.includes('/')?dateToYMD(b.dt):b.dt;
+    return by.localeCompare(ay) || (b.id - a.id);
   });
 
-  // Get unique dates
-  const dates = [...new Set(allPicks.map(p => p.dt.includes('/') ? dateToYMD(p.dt) : p.dt))];
+  // Unique dates sorted newest first
+  const dates = [...new Set(sorted.map(p => p.dt.includes('/')?dateToYMD(p.dt):p.dt))];
 
-  if(!dates.length){
-    body.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);">No picks logged yet.</div>';
+  if(!sorted.length){
+    body.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted);">No picks logged yet.</div>';
     return;
   }
 
-  const unit = S.br.unit || 100;
-  let html = '';
+  // ── Helper: calc P&L for a pick using actual $ if set ──────────────────
+  function pickPnlDollar(p, anchor){
+    if(p.rs==='Pending') return null;
+    const actual = (p._kellyActual!=null && p._kellyActual!=='') ? parseFloat(p._kellyActual) : null;
+    const recKuPct = p.ku ? Math.min(p.ku*(S.br.kelly||0.5), S.br.maxPct||3) : 0;
+    const riskD = actual!==null ? actual : (recKuPct>0 ? recKuPct/100*anchor : p.un*unit);
+    if(p.od>=0) return p.rs==='Win' ? riskD*(p.od/100) : -riskD;
+    else         return p.rs==='Win' ? riskD*(100/Math.abs(p.od)) : -riskD;
+  }
 
-  dates.forEach(ymd => {
-    const mdy = ymdToMDY(ymd);
-    const dayPicks = allPicks.filter(p => (p.dt.includes('/') ? dateToYMD(p.dt) : p.dt) === ymd);
-    const startBR = getDailyStartBR(ymd);
-    const anchor = startBR || S.br.start || 10000;
+  // ── Build day summary data ──────────────────────────────────────────────
+  const daySummaries = dates.map(ymd => {
+    const dayPicks = sorted.filter(p=>(p.dt.includes('/')?dateToYMD(p.dt):p.dt)===ymd);
+    const anchor = getDailyStartBR(ymd) || base;
+    const confirmed = !!(S._dailyBR && S._dailyBR[ymd] && S._dailyBR[ymd].confirmed);
+    const atRisk = dayPicks.reduce((s,p)=>{
+      const actual=(p._kellyActual!=null&&p._kellyActual!=='')?parseFloat(p._kellyActual):null;
+      const recKuPct=p.ku?Math.min(p.ku*(S.br.kelly||0.5),S.br.maxPct||3):0;
+      return s+(actual!==null?actual:(recKuPct>0?recKuPct/100*anchor:p.un*unit));
+    },0);
+    const pnl = dayPicks.reduce((s,p)=>{ const v=pickPnlDollar(p,anchor); return s+(v||0); },0);
+    const pending = dayPicks.filter(p=>p.rs==='Pending').length;
+    return { ymd, anchor, confirmed, atRisk, pnl, close: anchor+pnl, pending, count: dayPicks.length };
+  });
 
-    // Day summary calcs — only settled picks for P&L
-    const settled = dayPicks.filter(p => p.rs !== 'Pending');
-    const pending = dayPicks.filter(p => p.rs === 'Pending');
+  // ── LEFT TABLE: rolling pick rows ──────────────────────────────────────
+  const pickRows = sorted.map((p,i)=>{
+    const ymd = p.dt.includes('/')?dateToYMD(p.dt):p.dt;
+    const anchor = getDailyStartBR(ymd) || base;
+    const recKuPct = p.ku ? Math.min(p.ku*(S.br.kelly||0.5), S.br.maxPct||3) : 0;
+    const recDollar = recKuPct>0 ? recKuPct/100*anchor : 0;
+    const actualVal = (p._kellyActual!=null&&p._kellyActual!=='') ? parseFloat(p._kellyActual) : '';
+    const pnlVal = pickPnlDollar(p, anchor);
+    const pnlStr = pnlVal===null ? '—' : (pnlVal>=0?'+$':'-$')+Math.abs(pnlVal).toFixed(0);
+    const pnlC = pnlVal===null?'var(--muted)':pnlVal>=0?'var(--green)':'var(--red)';
+    const rsC = p.rs==='Win'?'var(--green)':p.rs==='Loss'?'var(--red)':'var(--accent)';
+    const edC = p.ed>0?'var(--green)':p.ed<0?'var(--red)':'var(--muted)';
+    return `<tr style="cursor:pointer;border-bottom:1px solid var(--border);" onclick="openGameModal(${p.id})" title="Click to view game details">
+      <td style="padding:5px 6px;text-align:center"><button class="btn bg" style="padding:2px 5px;font-size:9px;" onclick="event.stopPropagation();openEditPick(${p.id})">✎</button></td>
+      <td style="padding:5px 6px;font-size:10px;color:var(--muted);white-space:nowrap">${p.dt}</td>
+      <td style="padding:5px 6px;font-weight:600;white-space:nowrap"><img src="${teamLogo(p.tx)}" width="14" height="14" style="object-fit:contain;vertical-align:middle;margin-right:3px;" onerror="this.style.display='none'" />${p.tx||'—'}</td>
+      <td style="padding:5px 6px;color:var(--muted);font-size:11px">${p.ha||'vs'} ${p.opp||'—'}</td>
+      <td style="padding:5px 6px;text-align:right;font-size:11px">${p.od>0?'+':''}${p.od}</td>
+      <td style="padding:5px 6px;text-align:right;font-size:11px;color:${edC}">${p.ed>=0?'+':''}${(p.ed||0).toFixed(1)}%</td>
+      <td style="padding:5px 6px;text-align:right;color:var(--muted);font-size:11px">${anchor>0?'$'+Math.round(anchor).toLocaleString():'—'}</td>
+      <td style="padding:5px 6px;text-align:right;color:var(--accent);font-size:11px;font-weight:600">${recDollar>0?recKuPct.toFixed(2)+'% / $'+recDollar.toFixed(0):'—'}</td>
+      <td style="padding:5px 4px;text-align:center" onclick="event.stopPropagation()">
+        <input type="number" value="${actualVal}" placeholder="${recDollar>0?recDollar.toFixed(0):''}"
+          style="width:64px;padding:2px 5px;border:1px solid var(--border);border-radius:3px;background:var(--bg2);color:var(--fg);font-size:11px;text-align:right;"
+          onchange="saveKellyActual(${p.id},this.value)" />
+      </td>
+      <td style="padding:5px 6px;text-align:center" onclick="event.stopPropagation()">
+        <select style="background:transparent;border:1px solid var(--border);color:${rsC};font-size:10px;padding:2px 3px;" onchange="updPick(${p.id},this.value)">
+          <option value="Pending" ${p.rs==='Pending'?'selected':''}>Pend</option>
+          <option value="Win" ${p.rs==='Win'?'selected':''}>Win</option>
+          <option value="Loss" ${p.rs==='Loss'?'selected':''}>Loss</option>
+        </select>
+      </td>
+      <td style="padding:5px 6px;text-align:right;font-weight:600;color:${pnlC}">${pnlStr}</td>
+    </tr>`;
+  }).join('');
 
-    // At risk = sum of actual dollars risked (actualDollar if set, else kelly rec, else units×unit)
-    const atRisk = dayPicks.reduce((s, p) => {
-      const actual = (p._kellyActual != null && p._kellyActual !== '') ? parseFloat(p._kellyActual) : null;
-      if(actual !== null) return s + actual;
-      const recDollar = p.ku ? Math.min(p.ku, S.br.maxPct||3) / 100 * anchor : p.un * unit;
-      return s + recDollar;
-    }, 0);
+  // ── RIGHT TABLE: day summary ────────────────────────────────────────────
+  const dayRows = daySummaries.map(d=>{
+    const pnlC = d.pnl>=0?'var(--green)':'var(--red)';
+    const pnlStr = (d.pnl>=0?'+$':'-$')+Math.abs(d.pnl).toFixed(0);
+    const pendNote = d.pending ? `<span style="color:var(--accent);font-size:9px;"> (+${d.pending}⏳)</span>` : '';
+    return `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:5px 8px;font-size:11px;color:var(--muted);white-space:nowrap">${d.ymd}</td>
+      <td style="padding:5px 8px;text-align:right">
+        <input type="number" value="${d.confirmed?Math.round(d.anchor):''}" placeholder="${Math.round(d.anchor)}"
+          style="width:76px;padding:2px 5px;border:1px solid ${d.confirmed?'var(--accent)':'var(--border)'};border-radius:3px;background:var(--bg2);color:${d.confirmed?'var(--accent)':'var(--muted)'};font-size:11px;font-weight:${d.confirmed?'700':'400'};text-align:right;"
+          onchange="confirmDailyBR('${d.ymd}',this.value)" title="${d.confirmed?'Confirmed':'Auto-calculated — type to override'}" />
+      </td>
+      <td style="padding:5px 8px;text-align:right;font-size:11px;color:var(--muted)">$${d.atRisk.toFixed(0)}${pendNote}</td>
+      <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:600;color:${pnlC}">${pnlStr}</td>
+      <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:700;color:${pnlC}">$${Math.round(d.close).toLocaleString()}</td>
+    </tr>`;
+  }).join('');
 
-    // P&L from settled only, using actual dollar if set
-    let pnl = 0;
-    settled.forEach(p => {
-      const actual = (p._kellyActual != null && p._kellyActual !== '') ? parseFloat(p._kellyActual) : null;
-      const riskDollar = actual !== null ? actual : (p.ku ? Math.min(p.ku, S.br.maxPct||3) / 100 * anchor : p.un * unit);
-      // kuw is in units of ku% of bankroll — convert to dollars
-      if(p.ku && anchor){
-        const kuDollar = p.ku / 100 * anchor;
-        const ratio = riskDollar / (kuDollar || 1);
-        pnl += (p.kuw || 0) * anchor / 100 * ratio;
-      } else {
-        pnl += (p.uw || 0) * unit;
-      }
-    });
-
-    const closingBR = anchor + pnl;
-    const startStr = startBR ? '$' + Math.round(anchor).toLocaleString() : '<span style="color:var(--red);font-size:10px;">not confirmed</span>';
-    const pnlColor = pnl >= 0 ? 'var(--green)' : 'var(--red)';
-    const pnlStr = (pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toFixed(0);
-
-    // Pick rows
-    const pickRows = dayPicks.map(p => {
-      const recKuPct = p.ku ? Math.min(p.ku * (S.br.kelly||0.5), S.br.maxPct||3) : 0;
-      const recDollar = recKuPct > 0 ? (recKuPct / 100 * anchor) : (p.un * unit);
-      const actualVal = (p._kellyActual != null && p._kellyActual !== '') ? parseFloat(p._kellyActual) : '';
-
-      // P&L for this pick using actual dollar
-      let pickPnl = '—';
-      if(p.rs !== 'Pending'){
-        const riskD = actualVal !== '' ? actualVal : recDollar;
-        let wonD;
-        if(p.od >= 0){
-          wonD = p.rs === 'Win' ? riskD * (p.od/100) : -riskD;
-        } else {
-          wonD = p.rs === 'Win' ? riskD * (100/Math.abs(p.od)) : -riskD;
-        }
-        pickPnl = (wonD >= 0 ? '+$' : '-$') + Math.abs(wonD).toFixed(0);
-      }
-      const pnlC = p.rs === 'Win' ? 'var(--green)' : p.rs === 'Loss' ? 'var(--red)' : 'var(--muted)';
-      const rsColor = p.rs === 'Win' ? 'var(--green)' : p.rs === 'Loss' ? 'var(--red)' : 'var(--accent)';
-      const odStr = (p.od > 0 ? '+' : '') + p.od;
-
-      return `<tr style="border-bottom:1px solid var(--border);">
-        <td style="padding:6px 8px;font-weight:600;">${p.tx || '—'}</td>
-        <td style="padding:6px 8px;color:var(--muted);font-size:11px;">${p.ha||'vs'} ${p.opp||'—'}</td>
-        <td style="padding:6px 8px;text-align:right;">${odStr}</td>
-        <td style="padding:6px 8px;text-align:right;color:${p.ed>0?'var(--green)':'var(--red)'};">${p.ed>=0?'+':''}${(p.ed||0).toFixed(1)}%</td>
-        <td style="padding:6px 8px;text-align:right;color:var(--muted);">${recKuPct > 0 ? recKuPct.toFixed(2)+'%' : '—'}</td>
-        <td style="padding:6px 8px;text-align:right;color:var(--accent);font-weight:600;">${recDollar > 0 ? '$'+recDollar.toFixed(0) : '—'}</td>
-        <td style="padding:6px 8px;text-align:center;">
-          <input type="number" value="${actualVal}" placeholder="${recDollar > 0 ? recDollar.toFixed(0) : ''}"
-            style="width:72px;padding:3px 6px;border:1px solid var(--border);border-radius:3px;background:var(--bg2);color:var(--fg);font-size:12px;text-align:right;"
-            onchange="saveKellyActual(${p.id}, this.value)" />
-        </td>
-        <td style="padding:6px 8px;text-align:center;color:${rsColor};font-size:11px;font-weight:600;">${p.rs}</td>
-        <td style="padding:6px 8px;text-align:right;font-weight:600;color:${pnlC};">${pickPnl}</td>
-      </tr>`;
-    }).join('');
-
-    html += `
-    <div style="margin-bottom:20px;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
-      <!-- Day header summary -->
-      <div style="background:var(--bg2);padding:10px 16px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;border-bottom:2px solid var(--border);">
-        <div style="font-weight:700;font-size:14px;color:var(--accent);min-width:100px;">${ymd}</div>
-        <div style="display:flex;gap:24px;flex:1;flex-wrap:wrap;">
-          <div><div style="font-size:10px;color:var(--muted);">Start</div><div style="font-weight:700;font-size:13px;">${startStr}</div></div>
-          <div><div style="font-size:10px;color:var(--muted);">At Risk</div><div style="font-weight:700;font-size:13px;">$${atRisk.toFixed(0)}${pending.length ? ' <span style="font-size:10px;color:var(--accent);">('+pending.length+' pend)</span>' : ''}</div></div>
-          <div><div style="font-size:10px;color:var(--muted);">P&L</div><div style="font-weight:700;font-size:13px;color:${pnlColor};">${pnlStr}</div></div>
-          <div><div style="font-size:10px;color:var(--muted);">Close</div><div style="font-weight:700;font-size:13px;color:${pnlColor};">$${Math.round(closingBR).toLocaleString()}</div></div>
-        </div>
-        ${!startBR ? `<button onclick="showDailyBRBanner()" style="padding:4px 10px;font-size:10px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;">Set Start</button>` : ''}
-      </div>
-      <!-- Pick rows -->
+  body.innerHTML = `
+  <div style="display:flex;gap:16px;align-items:flex-start;">
+    <!-- LEFT: rolling pick list -->
+    <div style="flex:1;min-width:0;overflow-x:auto;">
       <table style="width:100%;border-collapse:collapse;font-size:12px;font-family:var(--mono);">
         <thead>
-          <tr style="background:var(--bg2);border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;">
-            <th style="padding:5px 8px;text-align:left;">Pick</th>
-            <th style="padding:5px 8px;text-align:left;">vs</th>
-            <th style="padding:5px 8px;text-align:right;">Odds</th>
-            <th style="padding:5px 8px;text-align:right;">Edge</th>
-            <th style="padding:5px 8px;text-align:right;">Kelly %</th>
-            <th style="padding:5px 8px;text-align:right;">Rec $</th>
-            <th style="padding:5px 8px;text-align:center;">Actual $</th>
-            <th style="padding:5px 8px;text-align:center;">Result</th>
-            <th style="padding:5px 8px;text-align:right;">P&L</th>
+          <tr style="border-bottom:2px solid var(--border);color:var(--muted);font-size:10px;white-space:nowrap;">
+            <th style="padding:5px 6px;width:28px"></th>
+            <th style="padding:5px 6px;text-align:left">Date</th>
+            <th style="padding:5px 6px;text-align:left">Pick</th>
+            <th style="padding:5px 6px;text-align:left">vs</th>
+            <th style="padding:5px 6px;text-align:right">Odds</th>
+            <th style="padding:5px 6px;text-align:right">Edge</th>
+            <th style="padding:5px 6px;text-align:right">Day Start</th>
+            <th style="padding:5px 6px;text-align:right">Kelly% / Rec$</th>
+            <th style="padding:5px 6px;text-align:center">Actual $</th>
+            <th style="padding:5px 6px;text-align:center">Result</th>
+            <th style="padding:5px 6px;text-align:right">P&L</th>
           </tr>
         </thead>
         <tbody>${pickRows}</tbody>
       </table>
-    </div>`;
-  });
-
-  body.innerHTML = html;
+    </div>
+    <!-- RIGHT: day summary sticky -->
+    <div style="width:380px;flex-shrink:0;position:sticky;top:60px;align-self:flex-start;">
+      <div style="border:1px solid var(--border);border-radius:6px;overflow:hidden;">
+        <div style="background:var(--bg2);padding:8px 12px;font-weight:700;font-size:12px;color:var(--accent);border-bottom:1px solid var(--border);">
+          Day Summary <span style="font-size:10px;font-weight:400;color:var(--muted);margin-left:6px;">Type in Start to override</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;font-family:var(--mono);">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:10px;">
+              <th style="padding:5px 8px;text-align:left">Date</th>
+              <th style="padding:5px 8px;text-align:right">Start</th>
+              <th style="padding:5px 8px;text-align:right">At Risk</th>
+              <th style="padding:5px 8px;text-align:right">P&L</th>
+              <th style="padding:5px 8px;text-align:right">Close</th>
+            </tr>
+          </thead>
+          <tbody>${dayRows}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
 }
 
 function saveKellyActual(pickId, value){
-  const p = S.picks.find(p => p.id === pickId);
+  const p = S.picks.find(q => q.id === pickId);
   if(!p) return;
-  p._kellyActual = value === '' ? null : parseFloat(value);
+  p._kellyActual = (value===''||value===null) ? null : parseFloat(value);
   savePickToFirebase(p);
   localStorage.setItem('mlb26v3', JSON.stringify(S));
-  // Re-render to update P&L immediately
   renderKellyTracker();
   rPerf();
 }
@@ -4237,13 +4195,10 @@ async function loadFromFirebase(){
     subscribeToGamesDate(getActiveDate());
     loadActivityLog();
 
-    // Check daily BR
-    checkDailyBROnLoad();
     console.log('Firebase loaded, listeners active');
   } catch(e){
     console.error('Firebase load failed, falling back to localStorage:', e);
     load(); rGames(); rPicks(); rPerf(); loadBRUI();
-    checkDailyBROnLoad();
   }
 }
 
