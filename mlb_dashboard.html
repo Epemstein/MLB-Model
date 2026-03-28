@@ -2961,23 +2961,44 @@ function calcClosingBalance(dateYMD){
 }
 
 function calcAutoStartBR(todayYMD){
-  // Walk backwards to find the most recent day with a confirmed start + closing balance
-  for(let i = 1; i <= 30; i++){
+  // Walk back to find the most recent confirmed start, then chain forward
+  // through each intermediate day applying that day's P&L
+  let confirmedYMD = null;
+  let confirmedAmount = null;
+
+  for(let i = 1; i <= 60; i++){
     const d = new Date(todayYMD + 'T12:00:00Z');
     d.setUTCDate(d.getUTCDate() - i);
     const ymd = d.toISOString().slice(0,10);
-    const closing = calcClosingBalance(ymd);
-    if(closing !== null) return { amount: closing, basis: ymd };
-    // No confirmed start for that day — check if there are any picks
-    const mdy = ymdToMDY(ymd);
+    if(S._dailyBR && S._dailyBR[ymd] && S._dailyBR[ymd].confirmed){
+      confirmedYMD = ymd;
+      confirmedAmount = S._dailyBR[ymd].start;
+      break;
+    }
+  }
+
+  if(!confirmedYMD) return { amount: S.br.start || 10000, basis: 'settings' };
+
+  // Now chain forward from confirmedYMD through each day up to (but not including) todayYMD
+  let runningBalance = confirmedAmount;
+  const start = new Date(confirmedYMD + 'T12:00:00Z');
+  const end   = new Date(todayYMD + 'T12:00:00Z');
+
+  for(let d = new Date(start); d < end; d.setUTCDate(d.getUTCDate() + 1)){
+    const ymd = d.toISOString().slice(0,10);
+    // If this intermediate day has its own confirmed start, use that instead
+    if(ymd !== confirmedYMD && S._dailyBR && S._dailyBR[ymd] && S._dailyBR[ymd].confirmed){
+      runningBalance = S._dailyBR[ymd].start;
+    }
+    // Apply this day's settled P&L using runningBalance as the anchor
     const dayPicks = S.picks.filter(p => {
       const pYMD = p.dt.includes('/') ? dateToYMD(p.dt) : p.dt;
-      return pYMD === ymd;
+      return pYMD === ymd && p.rs !== 'Pending';
     });
-    // No picks that day either — keep going back
+    runningBalance += dayPicks.reduce((s, p) => s + pickPnlDollarGlobal(p, runningBalance), 0);
   }
-  // Fallback to S.br.start
-  return { amount: S.br.start || 10000, basis: 'settings' };
+
+  return { amount: runningBalance, basis: confirmedYMD };
 }
 
 function showDailyBRBanner(){ /* removed — Kelly tab handles this */ }
