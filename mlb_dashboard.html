@@ -2389,6 +2389,21 @@ function updGStats(calcs){
     const awMyOdds = g.myAwOdds || '';
     const hwMyOdds = g.myHwOdds || '';
 
+    // Placeholder: odds needed to produce exactly +3.00% edge vs model
+    // impl(placeholder) = mdlImplied - 0.03  →  convert back to American
+    function targetOdds(mdlOdds){
+      if(!mdlOdds) return '';
+      const mdlImp = mdlOdds >= 0 ? 100/(mdlOdds+100) : Math.abs(mdlOdds)/(Math.abs(mdlOdds)+100);
+      const targetImp = mdlImp - 0.03;
+      if(targetImp <= 0 || targetImp >= 1) return '';
+      const american = targetImp <= 0.5
+        ? Math.round((1 - targetImp) / targetImp * 100)
+        : Math.round(-targetImp / (1 - targetImp) * 100);
+      return american >= 0 ? '+' + american : String(american);
+    }
+    const awPlaceholder = targetOdds(r.awMO);
+    const hwPlaceholder = targetOdds(r.hwMO);
+
     rows.push(`<tr>
       <td rowspan="2" style="${f}color:var(--muted);font-size:11px;vertical-align:middle;border-right:1px solid var(--border);white-space:nowrap;background:#fff;">
         <div style="font-weight:600;color:var(--text)">${game}${lineupDot}</div>
@@ -2399,6 +2414,7 @@ function updGStats(calcs){
         ${g.away}
       </td>
       <td style="${f}text-align:right;${awBg}"><input type="text" inputmode="numeric" value="${awMyOdds}"
+        placeholder="${awPlaceholder}"
         style="width:44px;font-family:Calibri,sans-serif;font-size:11px;text-align:right;border:1px solid var(--border2);border-radius:3px;padding:1px 3px;background:transparent;"
         data-gid="${gid}" data-side="aw"
         oninput="setMyOdds('${gid}','aw',this.value)" /></td>
@@ -2411,6 +2427,7 @@ function updGStats(calcs){
         ${g.home}
       </td>
       <td style="${f}text-align:right;${hwBg}"><input type="text" inputmode="numeric" value="${hwMyOdds}"
+        placeholder="${hwPlaceholder}"
         style="width:44px;font-family:Calibri,sans-serif;font-size:11px;text-align:right;border:1px solid var(--border2);border-radius:3px;padding:1px 3px;background:transparent;"
         data-gid="${gid}" data-side="hw"
         oninput="setMyOdds('${gid}','hw',this.value)" /></td>
