@@ -2175,11 +2175,16 @@ function toggleDrawer(id){
 // ═══════════════════════════════════════════════
 
 function calcKellyUnits(od, edge){
-  // Full Kelly: f = edge% / (decimal_odds - 1)
+  // Full Kelly: f = (b×p - q) / b  where b = decimal_odds - 1, p = win prob, q = 1-p
   const dec = od >= 0 ? (od/100 + 1) : (100/Math.abs(od) + 1);
   const b = dec - 1;
   if(b <= 0 || edge <= 0) return 0;
-  return ((edge/100) / b) * 100; // return as % of bankroll
+  // Derive win prob from implied odds + edge
+  const imp = od >= 0 ? 100/(od + 100) : Math.abs(od)/(Math.abs(od) + 100);
+  const p = imp + (edge / 100);
+  const q = 1 - p;
+  const kelly = (b * p - q) / b;
+  return Math.max(0, kelly) * 100; // return as % of bankroll
 }
 
 
