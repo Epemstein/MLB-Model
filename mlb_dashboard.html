@@ -3045,7 +3045,8 @@ function updateKellyRec(){
   const pctEl = document.getElementById('p-kelly-pct');
   if(!recEl) return;
 
-  const anchor = getTodayStartBR() || S.br.start || 10000;
+  const today = getActiveDate();
+  const anchor = getTodayStartBR() || calcAutoStartBR(today).amount;
   const odVal = parseFloat(document.getElementById('p-od')?.value);
   const edVal = parseFloat(document.getElementById('p-ed')?.value);
   if(!isNaN(odVal) && !isNaN(edVal) && edVal > 0){
@@ -3058,7 +3059,7 @@ function updateKellyRec(){
   } else {
     recEl.textContent = '—';
     recEl.style.color = 'var(--muted)';
-    pctEl.textContent = getTodayStartBR() ? '0.00% of $' + Math.round(anchor).toLocaleString() : 'confirm today\'s start first';
+    pctEl.textContent = '0.00% of $' + Math.round(anchor).toLocaleString();
   }
 }
 
