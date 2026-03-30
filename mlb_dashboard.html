@@ -2565,9 +2565,10 @@ async function runOvernights(){
     }
 
     // Step 5 — deduplicate: skip any pick already logged for same team + date
+    // Check S.overnights (Firestore-synced) — once permissions are fixed this is the source of truth
     const filtered = newPicks.filter(p => {
       const dupe = S.overnights.find(o => o.tx === p.tx && o.dt === p.dt);
-      if(dupe){ console.log(`Overnights: skipping duplicate ${p.tx} on ${p.dt}`); }
+      if(dupe) console.log(`Overnights: skipping duplicate ${p.tx} on ${p.dt}`);
       return !dupe;
     });
 
@@ -2577,10 +2578,12 @@ async function runOvernights(){
       return;
     }
 
-    // Step 6 — save to S.overnights and Firestore
+    // Step 6 — save to S.overnights immediately (before Firestore sync) and persist
     filtered.forEach(p => {
-      S.overnights.push(p);
-      saveOvernightToFirebase(p);
+      if(!S.overnights.find(o => o.tx === p.tx && o.dt === p.dt)){
+        S.overnights.push(p);
+        saveOvernightToFirebase(p);
+      }
     });
     localStorage.setItem('mlb26v3', JSON.stringify(S));
     rOvernights();
