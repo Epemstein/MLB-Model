@@ -1038,14 +1038,7 @@ input[type=number] { -moz-appearance:textfield; }
 
 <!-- ══ ACTIVITY LOG ══ -->
 <div id="panel-activity" class="panel">
-  <div class="g2" style="gap:14px;">
-    <div class="card">
-      <div class="ct">Logins <span id="activity-count-login" style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);"></span></div>
-      <div class="sw"><table class="dt" style="font-size:11px;">
-        <thead><tr><th style="width:130px">Time</th><th style="width:80px">User</th><th>Action</th></tr></thead>
-        <tbody id="activity-body-login"><tr><td colspan="3" class="nd">No logins yet.</td></tr></tbody>
-      </table></div>
-    </div>
+  <div>
     <div class="card">
       <div class="ct">Lineup Changes <span id="activity-count-lineup" style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);"></span></div>
       <div class="sw"><table class="dt" style="font-size:11px;">
@@ -4290,7 +4283,6 @@ function signInWithGoogle(){
 function signOut(){
   if(_currentUser){
     setPresenceOffline(_currentUser.uid);
-    logActivity(`signed out`, '', 'login');
     setTimeout(() => auth.signOut(), 500);
   } else {
     auth.signOut();
@@ -4319,7 +4311,6 @@ auth.onAuthStateChanged(user => {
     setupPresence(user);
     loadFromFirebase();
     // Log login after short delay so listeners are ready
-    setTimeout(() => logActivity(`signed in`, '', 'login'), 2000);
   } else {
     _currentUser = null;
     document.getElementById('login-screen').style.display = 'flex';
@@ -4534,8 +4525,7 @@ function logActivity(action, team, category){
   // Auto-detect category if not specified
   if(!category){
     const a = action.toLowerCase();
-    if(a.includes('signed in') || a.includes('signed out') || a.includes('logged in')) category = 'login';
-    else if(a.includes('logged pick') || a.includes('deleted pick') || a.includes('marked pick') || a.includes('edited pick')) category = 'bets';
+    if(a.includes('logged pick') || a.includes('deleted pick') || a.includes('marked pick') || a.includes('edited pick')) category = 'bets';
     else category = 'lineup';
   }
   const name = _currentUser.displayName || _currentUser.email;
@@ -4557,7 +4547,6 @@ function renderActivityLog(docs){
   function getCategory(d){
     if(d.category) return d.category;
     const a = (d.action||'').toLowerCase();
-    if(a.includes('signed in')||a.includes('signed out')||a.includes('logged in')) return 'login';
     if(a.includes('logged pick')||a.includes('deleted pick')||a.includes('marked pick')||a.includes('edited pick')) return 'bets';
     return 'lineup';
   }
@@ -4573,19 +4562,14 @@ function renderActivityLog(docs){
       </tr>`;
     }).join('');
   }
-  const logins  = docs.filter(d => getCategory(d) === 'login');
   const lineups = docs.filter(d => getCategory(d) === 'lineup');
   const bets    = docs.filter(d => getCategory(d) === 'bets');
-  const lb  = document.getElementById('activity-body-login');
   const lnb = document.getElementById('activity-body-lineup');
   const bb  = document.getElementById('activity-body-bets');
-  if(lb)  lb.innerHTML  = buildRows(logins);
   if(lnb) lnb.innerHTML = buildRows(lineups);
   if(bb)  bb.innerHTML  = buildRows(bets);
-  const lc  = document.getElementById('activity-count-login');
   const lnc = document.getElementById('activity-count-lineup');
   const bc  = document.getElementById('activity-count-bets');
-  if(lc)  lc.textContent  = logins.length  + ' events';
   if(lnc) lnc.textContent = lineups.length + ' events';
   if(bc)  bc.textContent  = bets.length    + ' events';
 }
