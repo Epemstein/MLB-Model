@@ -2645,6 +2645,8 @@ function rOvernights(){
 }
 
 function delOvernight(id){
+  const dp = S.overnights.find(p => p.id === id);
+  if(dp) logActivity(`Overnight deleted: ${dp.tx} ${dp.od > 0 ? '+' : ''}${dp.od} vs ${dp.opp} (${dp.dt.slice(0,5)})`, dp.tx, 'bets');
   S.overnights = S.overnights.filter(p => p.id !== id);
   deleteOvernightFromFirebase(id);
   localStorage.setItem('mlb26v3', JSON.stringify(S));
