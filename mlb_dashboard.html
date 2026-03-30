@@ -3157,11 +3157,19 @@ function getPitcherWar162(p){
   return ipStart * warIP * 32;
 }
 
+let _ipLogTimer = null;
+
 function setIpOverride(name, team, val){
   const _ipN = parseFloat(val);
   const isRevert2 = isNaN(_ipN) || _ipN <= 0;
-  if(_currentUser && isRevert2) logActivity(`IP/Start revert: ${name} (${team}, ${getActiveDate().slice(5,7)}/${getActiveDate().slice(8,10)})`, team);
-  else if(_currentUser && !isRevert2 && val.trim().length > 0) logActivity(`IP/Start: ${name} (${team}) → ${val} (${getActiveDate().slice(5,7)}/${getActiveDate().slice(8,10)})`, team);
+  // Debounce logging — only fire 1.5s after user stops typing
+  if(_currentUser){
+    clearTimeout(_ipLogTimer);
+    _ipLogTimer = setTimeout(() => {
+      if(isRevert2) logActivity(`IP/Start revert: ${name} (${team}, ${getActiveDate().slice(5,7)}/${getActiveDate().slice(8,10)})`, team);
+      else if(val.trim().length > 0) logActivity(`IP/Start: ${name} (${team}) → ${val} (${getActiveDate().slice(5,7)}/${getActiveDate().slice(8,10)})`, team);
+    }, 1500);
+  }
   const key = name + '|' + team;
   const n = parseFloat(val);
   const isRevert = isNaN(n) || n <= 0;
