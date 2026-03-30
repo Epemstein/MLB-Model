@@ -783,6 +783,7 @@ input[type=number] { -moz-appearance:textfield; }
     <button class="btn bp" id="fetch-btn" onclick="fetchMLBGames()">↻ Fetch</button>
     <button class="btn bg" onclick="S.games=[];save();rGames();">Clear</button>
     <span class="api-status" id="api-status"></span>
+    <span id="standings-pending-indicator" style="display:none;font-size:10px;font-family:var(--mono);color:var(--yellow);margin-left:6px;" title="Standings not yet loaded — projected wins and edges may be slightly off">⚠ standings loading…</span>
   </div>
 
   <!-- ODDS TABLE + GAME CARDS side by side -->
@@ -4107,11 +4108,18 @@ async function fetchStandings(){
     if(!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     _standingsData = data.records || [];
-    _projWinsCache = null; // recalculate with fresh games-played data
+    _projWinsCache = null; // force recalculate with fresh games-played data
     const ts = new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
     status.textContent = 'Updated ' + ts;
+    // Hide pending indicator
+    const ind = document.getElementById('standings-pending-indicator');
+    if(ind) ind.style.display = 'none';
+    // Re-render everything that depends on standings/games-played
     renderStandings();
     renderTeamSidebar();
+    rGames();        // recalculates edges + projected wins with correct GP
+    renderBaseline(); // recalculates scaled WAR with correct games remaining
+    if(document.getElementById('panel-teams').classList.contains('active')) renderTeam(currentTeam);
   } catch(e) {
     status.textContent = 'Failed: ' + e.message;
     console.error('Standings fetch failed:', e);
@@ -4691,6 +4699,9 @@ async function loadFromFirebase(){
 
     // Initial render
     rGames(); rPerf(); loadBRUI();
+    // Show pending indicator until standings load
+    const _ind = document.getElementById('standings-pending-indicator');
+    if(_ind) _ind.style.display = '';
     fetchStandings();
 
     // Now set up real-time listeners (picks + activity)
