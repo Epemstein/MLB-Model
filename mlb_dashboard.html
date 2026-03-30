@@ -2721,6 +2721,12 @@ function updGStats(calcs){
   const body = document.getElementById('odds-summary-body');
   if(!calcs.length){ body.innerHTML='<tr><td colspan="7" class="nd">No games loaded.</td></tr>'; return; }
 
+  // Returns true if game has already started (commenceTime is in the past)
+  function gameStarted(g){
+    if(!g.commenceTime) return false;
+    return Date.now() > new Date(g.commenceTime).getTime();
+  }
+
   function edgeBg(edge){ return edgeBgStyle(edge); }
 
   // Best odds helper — higher American odds = better for bettor
@@ -2732,9 +2738,11 @@ function updGStats(calcs){
   }
 
   // Recalculate edge: My overrides all; otherwise best of NoVig/BO
+  // NoVig goes live during games so null it out after first pitch
   function calcEdge(g, side, xwp){
     const myKey = side==='aw' ? 'myAwOdds' : 'myHwOdds';
-    const nv = side==='aw' ? g.awayOdds : g.homeOdds;
+    const started = gameStarted(g);
+    const nv = started ? null : (side==='aw' ? g.awayOdds : g.homeOdds);
     const bo = side==='aw' ? g.awayBO : g.homeBO;
     const useOdds = g[myKey] || bestOf(nv, bo);
     if(useOdds == null) return null;
@@ -2782,11 +2790,14 @@ function updGStats(calcs){
     const hwPlaceholder = targetOdds(r.hwMO);
 
     // Highlighting: bold + accent color on whichever book has better odds
+    // NoVig goes live during games — show as null after first pitch
+    const started = gameStarted(g);
     function oddsCell(nv, bo, bg){
-      const nvStr = fmtO(nv);
+      const nvEff = started ? null : nv;
+      const nvStr = fmtO(nvEff);
       const boStr = fmtO(bo);
-      const nvBetter = nv != null && (bo == null || nv >= bo);
-      const boBetter = bo != null && (nv == null || bo > nv);
+      const nvBetter = nvEff != null && (bo == null || nvEff >= bo);
+      const boBetter = bo != null && (nvEff == null || bo > nvEff);
       const nvStyle = `${f}text-align:right;${bg}${nvBetter ? 'font-weight:700;color:var(--accent);' : 'color:#000;'}`;
       const boStyle = `${f}text-align:right;${bg}${boBetter ? 'font-weight:700;color:var(--accent);' : 'color:#000;'}`;
       return [nvStyle, boStyle, nvStr, boStr];
