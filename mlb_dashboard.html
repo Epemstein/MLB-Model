@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>v12 MLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -2326,7 +2326,8 @@ function autoCalcEdge(){
 async function sendTelegramPick(pick){
   try {
     const dtYMD    = pick.dt.slice(6,10)+'-'+pick.dt.slice(0,2)+'-'+pick.dt.slice(3,5);
-    const br       = calcAutoStartBR(dtYMD) || S.br.start;
+    let br = S.br.start || 10000;
+    try { const brResult = calcAutoStartBR(dtYMD); if(brResult && !isNaN(brResult)) br = brResult; } catch(e){}
     const kellyPct = pick.ku ? Math.min(pick.ku * (S.br.kelly||0.5), S.br.maxPct||3) : 0;
     const riskAmt  = (kellyPct / 100 * br).toFixed(0);
     const winAmt   = pick.od >= 0
