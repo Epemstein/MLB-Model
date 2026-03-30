@@ -1632,17 +1632,18 @@ async function fetchNoVigOdds(games, date){
     console.log('Odds API returned 0 events for us_ex region');
   }
 
-  // Filter to only events on the requested date (YYYY-MM-DD)
-  const dateEvents = data.filter(event => {
-    const eventDate = event.commence_time?.slice(0, 10); // UTC date
-    // Also check ET date since MLB games can start after midnight UTC
-    const etDate = new Date(event.commence_time);
-    etDate.setHours(etDate.getHours() - 5); // rough ET offset
-    const etDateStr = etDate.toISOString().slice(0, 10);
-    return eventDate === date || etDateStr === date;
-  });
+  // Filter to only events on the requested date in ET
+  // MLB games are scheduled in ET — convert UTC commence_time to ET date for comparison
+  function getETDate(utcStr){
+    const d = new Date(utcStr);
+    // ET = UTC-5 (EST) or UTC-4 (EDT); use UTC-4 during baseball season (Mar-Nov)
+    const etOffset = -4 * 60;
+    const etMs = d.getTime() + etOffset * 60000;
+    return new Date(etMs).toISOString().slice(0, 10);
+  }
 
-  console.log(`NoVig: ${data.length} total events, ${dateEvents.length} on ${date}`);
+  const dateEvents = data.filter(event => getETDate(event.commence_time) === date);
+  console.log(`NoVig: ${data.length} total events, ${dateEvents.length} on ${date} (ET)`);
 
   // Clear existing odds for all games on this date first
   games.forEach(g => { g.awayOdds = null; g.homeOdds = null; });
