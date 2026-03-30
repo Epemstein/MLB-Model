@@ -800,10 +800,11 @@ input[type=number] { -moz-appearance:textfield; }
         <div id="odds-table-body">
           <table class="dt" id="odds-summary-table" style="width:100%;font-family:Calibri,sans-serif;table-layout:fixed;font-size:11px;">
             <colgroup>
-              <col style="width:22%">
-              <col style="width:18%">
-              <col style="width:15%">
-              <col style="width:15%">
+              <col style="width:20%">
+              <col style="width:14%">
+              <col style="width:12%">
+              <col style="width:12%">
+              <col style="width:12%">
               <col style="width:15%">
               <col style="width:15%">
             </colgroup>
@@ -812,11 +813,12 @@ input[type=number] { -moz-appearance:textfield; }
               <th style="padding:4px 6px">Team</th>
               <th style="text-align:right;padding:4px 4px">My</th>
               <th style="text-align:right;padding:4px 4px">NoVig</th>
+              <th style="text-align:right;padding:4px 4px">BO</th>
               <th style="text-align:right;padding:4px 4px">Mdl</th>
               <th style="text-align:right;padding:4px 4px">Edge</th>
             </tr></thead>
             <tbody id="odds-summary-body">
-              <tr><td colspan="6" class="nd">Load a slate.</td></tr>
+              <tr><td colspan="7" class="nd">Load a slate.</td></tr>
             </tbody>
           </table>
         </div>
@@ -1619,7 +1621,7 @@ async function fetchNoVigOdds(games, date){
   // Fetch NoVig.ag moneyline odds via The Odds API proxy
   // API key is injected server-side — never exposed in frontend
   // us_ex = US exchanges region (where NoVig lives)
-  const url = `${PROXY_BASE}/odds-api/sports/baseball_mlb/odds/?regions=us_ex&markets=h2h&oddsFormat=american&bookmakers=novig`;
+  const url = `${PROXY_BASE}/odds-api/sports/baseball_mlb/odds/?regions=us_ex,us&markets=h2h&oddsFormat=american&bookmakers=novig,betonlineag`;
   const res = await fetch(url);
   if(!res.ok) throw new Error(`Odds API ${res.status}`);
   const data = await res.json();
@@ -1646,7 +1648,7 @@ async function fetchNoVigOdds(games, date){
   console.log(`NoVig: ${data.length} total events, ${dateEvents.length} on ${date} (ET)`);
 
   // Clear existing odds for all games on this date first
-  games.forEach(g => { g.awayOdds = null; g.homeOdds = null; });
+  games.forEach(g => { g.awayOdds = null; g.homeOdds = null; g.awayBO = null; g.homeBO = null; });
 
   let matched = 0;
   for(const event of dateEvents){
@@ -1658,22 +1660,31 @@ async function fetchNoVigOdds(games, date){
     const game = games.find(g => g.away === awayAbr && g.home === homeAbr);
     if(!game) continue;
 
-    // Try novig key, fall back to first available exchange book
-    const bk = event.bookmakers.find(b => b.key === 'novig') || event.bookmakers[0];
-    if(!bk) continue;
-    console.log(`Using bookmaker: ${bk.key} for ${awayName} @ ${homeName}`);
-    const mkt = bk.markets.find(m => m.key === 'h2h');
-    if(!mkt) continue;
-
-    const ao = mkt.outcomes.find(o => o.name === awayName);
-    const ho = mkt.outcomes.find(o => o.name === homeName);
-    if(ao && ho){
-      game.awayOdds = ao.price;
-      game.homeOdds = ho.price;
-      matched++;
+    // NoVig
+    const nvBk = event.bookmakers.find(b => b.key === 'novig');
+    if(nvBk){
+      const mkt = nvBk.markets.find(m => m.key === 'h2h');
+      if(mkt){
+        const ao = mkt.outcomes.find(o => o.name === awayName);
+        const ho = mkt.outcomes.find(o => o.name === homeName);
+        if(ao && ho){ game.awayOdds = ao.price; game.homeOdds = ho.price; }
+      }
     }
+
+    // BetOnline
+    const boBk = event.bookmakers.find(b => b.key === 'betonlineag');
+    if(boBk){
+      const mkt = boBk.markets.find(m => m.key === 'h2h');
+      if(mkt){
+        const ao = mkt.outcomes.find(o => o.name === awayName);
+        const ho = mkt.outcomes.find(o => o.name === homeName);
+        if(ao && ho){ game.awayBO = ao.price; game.homeBO = ho.price; }
+      }
+    }
+
+    if(game.awayOdds || game.awayBO) matched++;
   }
-  console.log(`NoVig odds: matched ${matched}/${games.length} games`);
+  console.log(`Odds: matched ${matched}/${games.length} games (NoVig + BetOnline)`);
 }
 
 async function refreshOddsOnly(){
@@ -1997,8 +2008,18 @@ function modelCalc(g){
   const awWP = awGameScore / tot;
   const hwWP = hwGameScore / tot;
   const awMO = pToAm(awWP), hwMO = pToAm(hwWP);
-  const awEdge = g.awayOdds != null ? awWP - impl(g.awayOdds) : null;
-  const hwEdge = g.homeOdds != null ? hwWP - impl(g.homeOdds) : null;
+  // Best odds = whichever of NoVig/BO gives the higher payout (better for bettor)
+  function bestOdds(nv, bo){
+    if(nv == null && bo == null) return null;
+    if(nv == null) return bo;
+    if(bo == null) return nv;
+    // Higher American odds = better for bettor
+    return nv >= bo ? nv : bo;
+  }
+  const awBest = bestOdds(g.awayOdds, g.awayBO);
+  const hwBest = bestOdds(g.homeOdds, g.homeBO);
+  const awEdge = awBest != null ? awWP - impl(awBest) : null;
+  const hwEdge = hwBest != null ? hwWP - impl(hwBest) : null;
 
   const awSpName = g.awaySpName || awTD.rotation_sp?.[0]?.name || 'TBD';
   const hwSpName = g.homeSpName || hwTD.rotation_sp?.[0]?.name || 'TBD';
@@ -2400,15 +2421,25 @@ function toggleOddsTable(){
 
 function updGStats(calcs){
   const body = document.getElementById('odds-summary-body');
-  if(!calcs.length){ body.innerHTML='<tr><td colspan="6" class="nd">No games loaded.</td></tr>'; return; }
+  if(!calcs.length){ body.innerHTML='<tr><td colspan="7" class="nd">No games loaded.</td></tr>'; return; }
 
   function edgeBg(edge){ return edgeBgStyle(edge); }
 
-  // Recalculate edge using myOdds if set, otherwise market odds
+  // Best odds helper — higher American odds = better for bettor
+  function bestOf(a, b){
+    if(a == null && b == null) return null;
+    if(a == null) return b;
+    if(b == null) return a;
+    return a >= b ? a : b;
+  }
+
+  // Recalculate edge: My overrides all; otherwise best of NoVig/BO
   function calcEdge(g, side, xwp){
     const myKey = side==='aw' ? 'myAwOdds' : 'myHwOdds';
-    const mktOdds = side==='aw' ? g.awayOdds : g.homeOdds;
-    const useOdds = g[myKey] || mktOdds;
+    const nv = side==='aw' ? g.awayOdds : g.homeOdds;
+    const bo = side==='aw' ? g.awayBO : g.homeBO;
+    const useOdds = g[myKey] || bestOf(nv, bo);
+    if(useOdds == null) return null;
     const imp = useOdds >= 0 ? 100/(useOdds+100) : Math.abs(useOdds)/(Math.abs(useOdds)+100);
     return xwp - imp;
   }
@@ -2420,12 +2451,11 @@ function updGStats(calcs){
 
     const awEdge = calcEdge(g, 'aw', n(r.awWP));
     const hwEdge = calcEdge(g, 'hw', n(r.hwWP));
-    const ae = (awEdge*100).toFixed(2);
-    const he = (hwEdge*100).toFixed(2);
+    const ae = awEdge != null ? (awEdge*100).toFixed(2) : null;
+    const he = hwEdge != null ? (hwEdge*100).toFixed(2) : null;
 
-    // Per-cell background — game cell stays white, min opacity 0.06 for any positive edge
-    const awBg = edgeBg(awEdge*100);
-    const hwBg = edgeBg(hwEdge*100);
+    const awBg = edgeBg(awEdge != null ? awEdge*100 : 0);
+    const hwBg = edgeBg(hwEdge != null ? hwEdge*100 : 0);
     const game = `${g.away} @ ${g.home}`;
     const f = 'font-family:Calibri,sans-serif;';
     const bothConfirmed = g.awConfirmed && g.hwConfirmed;
@@ -2439,8 +2469,7 @@ function updGStats(calcs){
     const awMyOdds = g.myAwOdds || '';
     const hwMyOdds = g.myHwOdds || '';
 
-    // Placeholder: odds needed to produce exactly +3.00% edge vs model
-    // impl(placeholder) = mdlImplied - 0.03  →  convert back to American
+    // Placeholder: odds needed for +3.00% edge vs model
     function targetOdds(mdlOdds){
       if(!mdlOdds) return '';
       const mdlImp = mdlOdds >= 0 ? 100/(mdlOdds+100) : Math.abs(mdlOdds)/(Math.abs(mdlOdds)+100);
@@ -2454,12 +2483,26 @@ function updGStats(calcs){
     const awPlaceholder = targetOdds(r.awMO);
     const hwPlaceholder = targetOdds(r.hwMO);
 
+    // Highlighting: bold + accent color on whichever book has better odds
+    function oddsCell(nv, bo, bg){
+      const nvStr = fmtO(nv);
+      const boStr = fmtO(bo);
+      const nvBetter = nv != null && (bo == null || nv >= bo);
+      const boBetter = bo != null && (nv == null || bo > nv);
+      const nvStyle = `${f}text-align:right;${bg}${nvBetter ? 'font-weight:700;color:var(--accent);' : 'color:#000;'}`;
+      const boStyle = `${f}text-align:right;${bg}${boBetter ? 'font-weight:700;color:var(--accent);' : 'color:#000;'}`;
+      return [nvStyle, boStyle, nvStr, boStr];
+    }
+
+    const [awNvStyle, awBoStyle, awNvStr, awBoStr] = oddsCell(g.awayOdds, g.awayBO, awBg);
+    const [hwNvStyle, hwBoStyle, hwNvStr, hwBoStr] = oddsCell(g.homeOdds, g.homeBO, hwBg);
+
     rows.push(`<tr>
       <td rowspan="2" style="${f}color:var(--muted);font-size:11px;vertical-align:middle;border-right:1px solid var(--border);white-space:nowrap;background:#fff;">
         <div style="font-weight:600;color:var(--text)">${game}${lineupDot}</div>
         <div style="font-size:10px;margin-top:2px;">${r.gameTime||''}</div>
       </td>
-      <td style="${f}color:#000;font-weight:600;${awBg}cursor:pointer;" title="Click to log bet" onclick="logTeam(this)" data-gid="${gid}" data-team="${g.away}" data-opp="${g.home}" data-edge="${ae}" data-xwp="${(n(r.awWP)*100).toFixed(2)}" data-time="${r.gameTime||''}" data-home="false" data-fallback="${g.myAwOdds||g.awayOdds}" class="odds-team-cell">
+      <td style="${f}color:#000;font-weight:600;${awBg}cursor:pointer;" title="Click to log bet" onclick="logTeam(this)" data-gid="${gid}" data-team="${g.away}" data-opp="${g.home}" data-edge="${ae}" data-xwp="${(n(r.awWP)*100).toFixed(2)}" data-time="${r.gameTime||''}" data-home="false" data-fallback="${g.myAwOdds||g.awayOdds||g.awayBO}" class="odds-team-cell">
         <img src="${teamLogo(g.away)}" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display='none'" />
         ${g.away}
       </td>
@@ -2468,11 +2511,12 @@ function updGStats(calcs){
         style="width:44px;font-family:Calibri,sans-serif;font-size:11px;text-align:right;border:1px solid var(--border2);border-radius:3px;padding:1px 3px;background:transparent;"
         data-gid="${gid}" data-side="aw"
         oninput="setMyOdds('${gid}','aw',this.value)" /></td>
-      <td style="${f}text-align:right;${awBg}color:#000">${fmtO(g.awayOdds)}</td>
+      <td style="${awNvStyle}">${awNvStr}</td>
+      <td style="${awBoStyle}">${awBoStr}</td>
       <td style="${f}text-align:right;${awBg}color:var(--accent)">${fmtO(r.awMO)}</td>
       <td data-edge="${gid}-aw" style="${f}text-align:right;font-weight:700;color:#000;${awBg}">${ae!=null?(awEdge>=0?'+':'')+ae+'%':'—'}</td>
     </tr><tr style="border-bottom:2px solid var(--border);">
-      <td style="${f}color:#000;font-weight:600;${hwBg}cursor:pointer;" title="Click to log bet" onclick="logTeam(this)" data-gid="${gid}" data-team="${g.home}" data-opp="${g.away}" data-edge="${he}" data-xwp="${(n(r.hwWP)*100).toFixed(2)}" data-time="${r.gameTime||''}" data-home="true" data-fallback="${g.myHwOdds||g.homeOdds}" class="odds-team-cell">
+      <td style="${f}color:#000;font-weight:600;${hwBg}cursor:pointer;" title="Click to log bet" onclick="logTeam(this)" data-gid="${gid}" data-team="${g.home}" data-opp="${g.away}" data-edge="${he}" data-xwp="${(n(r.hwWP)*100).toFixed(2)}" data-time="${r.gameTime||''}" data-home="true" data-fallback="${g.myHwOdds||g.homeOdds||g.homeBO}" class="odds-team-cell">
         <img src="${teamLogo(g.home)}" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display='none'" />
         ${g.home}
       </td>
@@ -2481,7 +2525,8 @@ function updGStats(calcs){
         style="width:44px;font-family:Calibri,sans-serif;font-size:11px;text-align:right;border:1px solid var(--border2);border-radius:3px;padding:1px 3px;background:transparent;"
         data-gid="${gid}" data-side="hw"
         oninput="setMyOdds('${gid}','hw',this.value)" /></td>
-      <td style="${f}text-align:right;${hwBg}color:#000">${fmtO(g.homeOdds)}</td>
+      <td style="${hwNvStyle}">${hwNvStr}</td>
+      <td style="${hwBoStyle}">${hwBoStr}</td>
       <td style="${f}text-align:right;${hwBg}color:var(--accent)">${fmtO(r.hwMO)}</td>
       <td data-edge="${gid}-hw" style="${f}text-align:right;font-weight:700;color:#000;${hwBg}">${he!=null?(hwEdge>=0?'+':'')+he+'%':'—'}</td>
     </tr>`);
