@@ -755,7 +755,8 @@ input[type=number] { -moz-appearance:textfield; }
 
 <nav>
   <button class="active" onclick="showPanel('games',this)">Games</button>
-  <button onclick="showPanel('picks',this)">Daily Picks</button>
+  <button onclick="showPanel('picks',this)">Picks</button>
+  <button onclick="showPanel('overnights',this)">Overnights</button>
   <button onclick="showPanel('kelly-tracker',this)">Kelly</button>
   <button onclick="showPanel('perf',this)">Performance</button>
   <button onclick="showPanel('proj-h',this)">Hitters</button>
@@ -863,6 +864,40 @@ input[type=number] { -moz-appearance:textfield; }
   <div class="card">
     <div class="ct">Pick Log <span id="p-ct" style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);"></span></div>
     <div class="sw"><table class="dt"><thead><tr><th style="width:42px">Bet No.</th><th style="width:28px"></th><th style="width:90px;white-space:nowrap">Placed</th><th style="width:70px">Date</th><th style="width:60px">Pick</th><th style="width:80px">Opp</th><th style="width:90px">Game Time</th><th style="width:60px;text-align:right">Odds</th><th style="width:45px;text-align:right">xWP</th><th style="width:55px;text-align:right">Edge</th><th style="width:55px;text-align:right" id="th-bet">Bet</th><th style="width:60px">Result</th><th style="width:65px;text-align:right" id="th-won">Won</th><th style="width:75px;text-align:right" id="th-run">Running</th><th style="width:28px"></th></tr></thead><tbody id="pb"><tr><td colspan="15" class="nd">No picks yet.</td></tr></tbody></table></div>
+  </div>
+</div>
+
+<!-- ══ OVERNIGHTS ══ -->
+<div id="panel-overnights" class="panel">
+  <div class="card" style="margin-bottom:14px;">
+    <div class="ct">Overnights — Auto-Log</div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+      <button id="overnight-btn" onclick="runOvernights()" class="btn" style="padding:8px 18px;font-size:13px;font-weight:600;background:linear-gradient(to right,#e8f3ff,#c5dff8);color:#1a3a5c;border:1px solid #a8c8ee;border-radius:5px;box-shadow:3px 3px 8px rgba(0,0,0,.15);cursor:pointer;">
+        ⚡ Log Tomorrow's Overnights
+      </button>
+      <div style="font-size:11px;color:var(--muted);">Fetches tomorrow's schedule + BetOnline odds, logs all games with ≥3% edge at 1u each.</div>
+      <span id="overnight-status" style="font-size:11px;font-family:var(--mono);color:var(--muted);"></span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ct">Overnight Pick Log <span id="on-ct" style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);"></span></div>
+    <div class="sw"><table class="dt"><thead><tr>
+      <th style="width:42px">Bet No.</th>
+      <th style="width:28px"></th>
+      <th style="width:90px;white-space:nowrap">Placed</th>
+      <th style="width:70px">Date</th>
+      <th style="width:60px">Pick</th>
+      <th style="width:80px">Opp</th>
+      <th style="width:90px">Game Time</th>
+      <th style="width:60px;text-align:right">Odds</th>
+      <th style="width:45px;text-align:right">xWP</th>
+      <th style="width:55px;text-align:right">Edge</th>
+      <th style="width:55px;text-align:right">Bet</th>
+      <th style="width:60px">Result</th>
+      <th style="width:65px;text-align:right">Won</th>
+      <th style="width:75px;text-align:right">Running</th>
+      <th style="width:28px"></th>
+    </tr></thead><tbody id="onb"><tr><td colspan="15" class="nd">No overnight picks yet.</td></tr></tbody></table></div>
   </div>
 </div>
 
@@ -1308,7 +1343,7 @@ const PROXY_BASE = isLocal ? `${window.location.protocol}//${window.location.hos
 // ═══════════════════════════════════════════════
 // STORE
 // ═══════════════════════════════════════════════
-const S={games:[],spOverrides:{},ipOverrides:{},picks:[],br:{start:10000,unit:100,kelly:0.5,maxPct:3},apiKey:'',lastFetch:null,_dailyBR:{}};
+const S={games:[],spOverrides:{},ipOverrides:{},picks:[],overnights:[],br:{start:10000,unit:100,kelly:0.5,maxPct:3},apiKey:'',lastFetch:null,_dailyBR:{}};
 function save(){
   // Save everything EXCEPT games to localStorage — games live in Firestore by date
   try{
@@ -1328,6 +1363,7 @@ function load(){
     if(d.apiKey)S.apiKey=d.apiKey;
     if(d.lastFetch)S.lastFetch=d.lastFetch;
     if(d._dailyBR)S._dailyBR={...S._dailyBR,...d._dailyBR};
+    if(d.overnights)S.overnights=d.overnights;
   }catch(e){}
 }
 
@@ -2377,6 +2413,211 @@ function rPicks(){
     </tr>`;
   }).join('');
 }
+// ═══════════════════════════════════════════════
+// OVERNIGHTS
+// ═══════════════════════════════════════════════
+
+async function runOvernights(){
+  const btn = document.getElementById('overnight-btn');
+  const status = document.getElementById('overnight-status');
+  btn.disabled = true;
+  btn.textContent = '⟳ Running…';
+  status.textContent = '';
+
+  try {
+    // Tomorrow's date
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    const tomorrow = d.toISOString().slice(0,10); // YYYY-MM-DD
+    const tomorrowMDY = `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${d.getFullYear()}`;
+
+    // Step 1 — fetch tomorrow's schedule
+    status.textContent = '⟳ Fetching schedule…';
+    const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${tomorrow}&hydrate=lineups,probablePitcher(note)`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error(`MLB API ${res.status}`);
+    const data = await res.json();
+    const dates = data.dates || [];
+    if(!dates.length || !dates[0].games?.length) throw new Error(`No games found for ${tomorrow}`);
+    const games = dates[0].games.map(parseMLBGame);
+
+    // Step 2 — fetch BetOnline odds for tomorrow
+    status.textContent = '⟳ Fetching BetOnline odds…';
+    const oddsUrl = `${PROXY_BASE}/odds-api/sports/baseball_mlb/odds/?regions=us&markets=h2h&oddsFormat=american&bookmakers=betonlineag`;
+    const oddsRes = await fetch(oddsUrl);
+    if(!oddsRes.ok) throw new Error(`Odds API ${oddsRes.status}`);
+    const oddsData = await oddsRes.json();
+
+    // Filter odds to tomorrow ET
+    function getETDate(utcStr){
+      const d2 = new Date(utcStr);
+      return new Date(d2.getTime() - 4*60*60000).toISOString().slice(0,10);
+    }
+    const tomorrowEvents = oddsData.filter(e => getETDate(e.commence_time) === tomorrow);
+
+    // Apply BetOnline odds to games
+    for(const event of tomorrowEvents){
+      const awAbr = NAME_TO_ABR[event.away_team] || event.away_team.split(' ').pop().slice(0,3).toUpperCase();
+      const hwAbr = NAME_TO_ABR[event.home_team] || event.home_team.split(' ').pop().slice(0,3).toUpperCase();
+      const game = games.find(g => g.away === awAbr && g.home === hwAbr);
+      if(!game) continue;
+      const bk = event.bookmakers.find(b => b.key === 'betonlineag');
+      if(!bk) continue;
+      const mkt = bk.markets.find(m => m.key === 'h2h');
+      if(!mkt) continue;
+      const ao = mkt.outcomes.find(o => o.name === event.away_team);
+      const ho = mkt.outcomes.find(o => o.name === event.home_team);
+      if(ao && ho){ game.awayBO = ao.price; game.homeBO = ho.price; }
+    }
+
+    // Step 3 — run model and find ≥3% edges vs BetOnline
+    status.textContent = '⟳ Calculating edges…';
+    const now = new Date().toLocaleString('en-US',{month:'2-digit',day:'2-digit',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true});
+    const newPicks = [];
+
+    for(const g of games){
+      const r = modelCalc(g);
+      if(!r) continue;
+
+      // Check away team
+      if(g.awayBO != null){
+        const imp = impl(g.awayBO);
+        const edge = (r.awWP||0) - imp;
+        if(edge >= 0.03){
+          const xwp = (r.awWP||0)*100;
+          const un = 1;
+          const uw = calcWon(g.awayBO, un, 'Pending');
+          newPicks.push({
+            id: Date.now() + Math.random(),
+            dt: tomorrowMDY, gt: r.gameTime||'', tp: now,
+            tx: g.away, opp: g.home, ha: '@',
+            od: g.awayBO, xwp: +xwp.toFixed(2), ed: +(edge*100).toFixed(2),
+            un, rs: 'Pending', uw, ku: 0, kuw: 0
+          });
+        }
+      }
+
+      // Check home team
+      if(g.homeBO != null){
+        const imp = impl(g.homeBO);
+        const edge = (r.hwWP||0) - imp;
+        if(edge >= 0.03){
+          const xwp = (r.hwWP||0)*100;
+          const un = 1;
+          const uw = calcWon(g.homeBO, un, 'Pending');
+          newPicks.push({
+            id: Date.now() + Math.random(),
+            dt: tomorrowMDY, gt: r.gameTime||'', tp: now,
+            tx: g.home, opp: g.away, ha: 'vs',
+            od: g.homeBO, xwp: +xwp.toFixed(2), ed: +(edge*100).toFixed(2),
+            un, rs: 'Pending', uw, ku: 0, kuw: 0
+          });
+        }
+      }
+    }
+
+    if(!newPicks.length){
+      status.textContent = `No edges ≥3% found for ${tomorrow}`;
+      toast('No overnight picks found');
+      return;
+    }
+
+    // Step 4 — save to S.overnights and Firestore
+    newPicks.forEach(p => {
+      S.overnights.push(p);
+      saveOvernightToFirebase(p);
+    });
+    localStorage.setItem('mlb26v3', JSON.stringify(S));
+    rOvernights();
+    logActivity(`Logged ${newPicks.length} overnight picks for ${tomorrowMDY}`, '', 'lineup');
+    status.textContent = `✓ Logged ${newPicks.length} picks for ${tomorrowMDY}`;
+    toast(`${newPicks.length} overnight picks logged ✓`);
+
+  } catch(e){
+    console.error('Overnights error:', e);
+    status.textContent = '✗ ' + e.message;
+    toast('Overnights failed: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⚡ Log Tomorrow\'s Overnights';
+  }
+}
+
+function rOvernights(){
+  const b = document.getElementById('onb');
+  document.getElementById('on-ct').textContent = S.overnights.length + ' bet' + (S.overnights.length !== 1 ? 's' : '');
+  if(!S.overnights.length){ b.innerHTML = '<tr><td colspan="15" class="nd">No overnight picks yet.</td></tr>'; return; }
+
+  let fwdRun = 0;
+  const runningTotals = S.overnights.map(p => {
+    if(p.rs !== 'Pending') fwdRun += p.uw;
+    return { run: fwdRun };
+  });
+
+  b.innerHTML = [...S.overnights].map((p,i) => ({p, rt:runningTotals[i]})).reverse().map(({p,rt},i) => {
+    const run = rt.run;
+    const rc = run >= 0 ? 'var(--green)' : 'var(--red)';
+    const wonStr = p.rs === 'Pending' ? '—' : (p.uw >= 0 ? '+' : '') + p.uw.toFixed(2) + 'u';
+    const runStr = p.rs === 'Pending' ? '—' : (run >= 0 ? '+' : '') + run.toFixed(2) + 'u';
+    const wc = p.uw > 0 ? 'var(--green)' : p.uw < 0 ? 'var(--red)' : 'var(--muted)';
+    return `<tr style="cursor:default;">
+      <td style="color:var(--muted);text-align:center">${S.overnights.length - i}</td>
+      <td style="text-align:center"><button class="btn bg" style="padding:2px 6px;font-size:9px;" onclick="openEditOvernight(${p.id})">✎</button></td>
+      <td style="color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${p.tp||'—'}</td>
+      <td style="white-space:nowrap;font-size:11px">${p.dt}</td>
+      <td style="font-weight:600;white-space:nowrap"><img src="${teamLogo(p.tx)}" width="16" height="16" style="object-fit:contain;vertical-align:middle;margin-right:4px;" onerror="this.style.display='none'" />${p.tx||'—'}</td>
+      <td style="color:var(--muted)">${p.ha||'vs'} ${p.opp||'—'}</td>
+      <td style="color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${p.gt||'—'}</td>
+      <td style="text-align:right">${p.od>0?'+':''}${p.od}</td>
+      <td style="color:var(--muted);text-align:right">${p.xwp?p.xwp.toFixed(1)+'%':'—'}</td>
+      <td style="color:${p.ed>0?'var(--green)':p.ed<0?'var(--red)':'var(--muted)'};text-align:right">${p.ed>=0?'+':''}${p.ed.toFixed(1)}%</td>
+      <td style="text-align:right">${p.un}u</td>
+      <td onclick="event.stopPropagation()"><select style="background:transparent;border:1px solid var(--border);color:${p.rs==='Win'?'var(--green)':p.rs==='Loss'?'var(--red)':'var(--accent)'};font-size:10px;padding:2px 4px;" onchange="updOvernight(${p.id},this.value)">
+        <option value="Pending" ${p.rs==='Pending'?'selected':''}>Pending</option>
+        <option value="Win" ${p.rs==='Win'?'selected':''}>Win</option>
+        <option value="Loss" ${p.rs==='Loss'?'selected':''}>Loss</option>
+      </select></td>
+      <td style="color:${wc};text-align:right">${wonStr}</td>
+      <td style="color:${rc};font-weight:600;text-align:right">${runStr}</td>
+      <td><button class="btn bd" style="padding:3px 7px;font-size:9px" onclick="delOvernight(${p.id})">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function delOvernight(id){
+  S.overnights = S.overnights.filter(p => p.id !== id);
+  deleteOvernightFromFirebase(id);
+  localStorage.setItem('mlb26v3', JSON.stringify(S));
+  rOvernights();
+}
+
+function updOvernight(id, rs){
+  const p = S.overnights.find(p => p.id === id);
+  if(!p) return;
+  p.rs = rs;
+  p.uw = calcWon(p.od, p.un, rs);
+  saveOvernightToFirebase(p);
+  localStorage.setItem('mlb26v3', JSON.stringify(S));
+  rOvernights();
+}
+
+function openEditOvernight(id){
+  // Reuse the edit pick modal for overnights
+  const p = S.overnights.find(q => q.id === id);
+  if(!p) return;
+  openEditPick(id, true); // pass flag to edit overnights
+}
+
+async function saveOvernightToFirebase(pick){
+  if(!_currentUser) return;
+  try { await db.collection('overnight_picks').doc(String(pick.id)).set({...pick, savedBy: _currentUser.uid}); }
+  catch(e){ console.error('Overnight save error:', e); }
+}
+
+async function deleteOvernightFromFirebase(id){
+  try { await db.collection('overnight_picks').doc(String(id)).delete(); } catch(e){}
+}
+
 function rPerf(){
   const res=S.picks.filter(p=>p.rs!=='Pending');
   const wins=res.filter(p=>p.rs==='Win').length;
@@ -3252,6 +3493,7 @@ function showPanel(name,btn){
   if(btn)btn.classList.add('active');
   if(name==='games')rGames();
   if(name==='kelly-tracker'){renderKellyTracker();}
+  if(name==='overnights'){rOvernights();}
   if(name==='perf')rCharts();
   if(name==='teams'){initTeamBtns();renderTeam(currentTeam);}
   if(name==='proj-h')rProjH();
@@ -4380,6 +4622,13 @@ function setupRealtimeListeners(){
     rPicks(); rPerf();
     console.log('Picks synced:', S.picks.length);
   }, e => console.error('Picks listener error:', e));
+
+  // ── Overnights: real-time listener ──
+  db.collection('overnight_picks').orderBy('id').onSnapshot(snap => {
+    S.overnights = snap.docs.map(d => d.data());
+    rOvernights();
+    console.log('Overnights synced:', S.overnights.length);
+  }, e => console.error('Overnights listener error:', e));
 
   // ── Games: subscribed via subscribeToGamesDate() called from loadFromFirebase ──
 
