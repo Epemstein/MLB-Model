@@ -1632,8 +1632,23 @@ async function fetchNoVigOdds(games, date){
     console.log('Odds API returned 0 events for us_ex region');
   }
 
+  // Filter to only events on the requested date (YYYY-MM-DD)
+  const dateEvents = data.filter(event => {
+    const eventDate = event.commence_time?.slice(0, 10); // UTC date
+    // Also check ET date since MLB games can start after midnight UTC
+    const etDate = new Date(event.commence_time);
+    etDate.setHours(etDate.getHours() - 5); // rough ET offset
+    const etDateStr = etDate.toISOString().slice(0, 10);
+    return eventDate === date || etDateStr === date;
+  });
+
+  console.log(`NoVig: ${data.length} total events, ${dateEvents.length} on ${date}`);
+
+  // Clear existing odds for all games on this date first
+  games.forEach(g => { g.awayOdds = null; g.homeOdds = null; });
+
   let matched = 0;
-  for(const event of data){
+  for(const event of dateEvents){
     const awayName = event.away_team;
     const homeName = event.home_team;
     const awayAbr = NAME_TO_ABR[awayName] || awayName.split(' ').pop().slice(0,3).toUpperCase();
@@ -1666,7 +1681,7 @@ async function refreshOddsOnly(){
   const btn = document.getElementById('odds-refresh-btn');
   if(btn){ btn.textContent = '⟳…'; btn.disabled = true; }
   try {
-    const date = S.lastFetch || getActiveDate();
+    const date = getActiveDate(); // always use the currently viewed date
     await fetchNoVigOdds(S.games, date);
     save();
     rGames();
@@ -1888,7 +1903,7 @@ function calcWon(od, un, rs){
 
 function aToDec(o){o=+o;return o>=0?(o/100+1):(100/Math.abs(o)+1);}
 function impl(o){o=+o;return o>=0?100/(o+100):Math.abs(o)/(Math.abs(o)+100);}
-function fmtO(o){o=+o;return o>0?`+${o}`:String(o);}
+function fmtO(o){if(o==null||o===''||isNaN(+o))return '—';o=+o;return o>0?`+${o}`:String(o);}
 function fmtD(v){return (v>=0?'+':'')+v.toFixed(3);}
 function pToAm(p){if(p>=0.5)return -Math.round((p/(1-p))*100);return Math.round(((1-p)/p)*100);}
 
@@ -1981,8 +1996,8 @@ function modelCalc(g){
   const awWP = awGameScore / tot;
   const hwWP = hwGameScore / tot;
   const awMO = pToAm(awWP), hwMO = pToAm(hwWP);
-  const awEdge = awWP - impl(g.awayOdds);
-  const hwEdge = hwWP - impl(g.homeOdds);
+  const awEdge = g.awayOdds != null ? awWP - impl(g.awayOdds) : null;
+  const hwEdge = g.homeOdds != null ? hwWP - impl(g.homeOdds) : null;
 
   const awSpName = g.awaySpName || awTD.rotation_sp?.[0]?.name || 'TBD';
   const hwSpName = g.homeSpName || hwTD.rotation_sp?.[0]?.name || 'TBD';
@@ -2027,12 +2042,12 @@ function rGames(){
     const awPct=(n(r.awWP)*100).toFixed(2);
     const hwPct=(n(r.hwWP)*100).toFixed(2);
     const awFav=n(r.awWP)>=n(r.hwWP);
-    const ae=(n(r.awEdge)*100).toFixed(1);
-    const he=(n(r.hwEdge)*100).toFixed(1);
-    const best=Math.max(n(r.awEdge),n(r.hwEdge));
-    const valCls=best>=0.05?' sval':best>=0.03?' val':'';
-    const acls=n(r.awEdge)>0?'hi':'lo';
-    const hcls=n(r.hwEdge)>0?'hi':'lo';
+    const ae = r.awEdge != null ? (n(r.awEdge)*100).toFixed(1) : null;
+    const he = r.hwEdge != null ? (n(r.hwEdge)*100).toFixed(1) : null;
+    const best = Math.max(r.awEdge != null ? n(r.awEdge) : -99, r.hwEdge != null ? n(r.hwEdge) : -99);
+    const valCls = best >= 0.05 ? ' sval' : best >= 0.03 ? ' val' : '';
+    const acls = r.awEdge != null ? (n(r.awEdge) > 0 ? 'hi' : 'lo') : 'lo';
+    const hcls = r.hwEdge != null ? (n(r.hwEdge) > 0 ? 'hi' : 'lo') : 'lo';
 
     // Team colors and logos
     const awInfo = TEAM_INFO[g.away]||{primary:'#333',secondary:'#666',espn:g.away.toLowerCase()};
@@ -2109,12 +2124,12 @@ function rGames(){
         <div class="gc-odds-side">
           <span class="odds-chip">${fmtO(g.awayOdds)}</span>
           <span class="odds-chip model">${fmtO(r.awMO)} mdl</span>
-          <span class="edge-chip ${acls}">${n(r.awEdge)>=0?'+':''}${ae}%</span>
+          <span class="edge-chip ${acls}">${ae!=null?(n(r.awEdge)>=0?'+':'')+ae+'%':'—'}</span>
         </div>
         <div class="gc-odds-side">
           <span class="odds-chip">${fmtO(g.homeOdds)}</span>
           <span class="odds-chip model">${fmtO(r.hwMO)} mdl</span>
-          <span class="edge-chip ${hcls}">${n(r.hwEdge)>=0?'+':''}${he}%</span>
+          <span class="edge-chip ${hcls}">${he!=null?(n(r.hwEdge)>=0?'+':'')+he+'%':'—'}</span>
         </div>
       </div>
 
@@ -2454,7 +2469,7 @@ function updGStats(calcs){
         oninput="setMyOdds('${gid}','aw',this.value)" /></td>
       <td style="${f}text-align:right;${awBg}color:#000">${fmtO(g.awayOdds)}</td>
       <td style="${f}text-align:right;${awBg}color:var(--accent)">${fmtO(r.awMO)}</td>
-      <td data-edge="${gid}-aw" style="${f}text-align:right;font-weight:700;color:#000;${awBg}">${awEdge>=0?'+':''}${ae}%</td>
+      <td data-edge="${gid}-aw" style="${f}text-align:right;font-weight:700;color:#000;${awBg}">${ae!=null?(awEdge>=0?'+':'')+ae+'%':'—'}</td>
     </tr><tr style="border-bottom:2px solid var(--border);">
       <td style="${f}color:#000;font-weight:600;${hwBg}cursor:pointer;" title="Click to log bet" onclick="logTeam(this)" data-gid="${gid}" data-team="${g.home}" data-opp="${g.away}" data-edge="${he}" data-xwp="${(n(r.hwWP)*100).toFixed(2)}" data-time="${r.gameTime||''}" data-home="true" data-fallback="${g.myHwOdds||g.homeOdds}" class="odds-team-cell">
         <img src="${teamLogo(g.home)}" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display='none'" />
@@ -2467,7 +2482,7 @@ function updGStats(calcs){
         oninput="setMyOdds('${gid}','hw',this.value)" /></td>
       <td style="${f}text-align:right;${hwBg}color:#000">${fmtO(g.homeOdds)}</td>
       <td style="${f}text-align:right;${hwBg}color:var(--accent)">${fmtO(r.hwMO)}</td>
-      <td data-edge="${gid}-hw" style="${f}text-align:right;font-weight:700;color:#000;${hwBg}">${hwEdge>=0?'+':''}${he}%</td>
+      <td data-edge="${gid}-hw" style="${f}text-align:right;font-weight:700;color:#000;${hwBg}">${he!=null?(hwEdge>=0?'+':'')+he+'%':'—'}</td>
     </tr>`);
   });
   body.innerHTML = rows.join('');
