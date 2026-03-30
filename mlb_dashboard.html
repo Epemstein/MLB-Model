@@ -808,7 +808,7 @@ input[type=number] { -moz-appearance:textfield; }
               <th style="padding:4px 6px">Game</th>
               <th style="padding:4px 6px">Team</th>
               <th style="text-align:right;padding:4px 4px">My</th>
-              <th style="text-align:right;padding:4px 4px">Mkt</th>
+              <th style="text-align:right;padding:4px 4px">LowVig</th>
               <th style="text-align:right;padding:4px 4px">Mdl</th>
               <th style="text-align:right;padding:4px 4px">Edge</th>
             </tr></thead>
@@ -1486,10 +1486,10 @@ async function fetchMLBGames(){
     } catch(e){ console.warn('FanGraphs lineup fetch failed:', e.message); }
 
 
-    // Step 3 — ESPN odds (free, no key, no rate limit)
+    // Step 3 — LowVig.ag odds via The Odds API (replaces ESPN)
     try {
-      await fetchESPNOdds(games, date);
-    } catch(e){ console.warn('ESPN odds failed:', e.message); }
+      await fetchLowVigOdds(games, date);
+    } catch(e){ console.warn('LowVig odds failed:', e.message); }
 
     S.games = games;
     S.lastFetch = date;
@@ -1612,47 +1612,38 @@ function getBestSP(team){
 // ─────────────────────────────────────────────────────────────
 // ESPN Scoreboard Odds — free, no key, no rate limit
 // ─────────────────────────────────────────────────────────────
-async function fetchESPNOdds(games, date){
-  // ESPN date format: YYYYMMDD
-  const espnDate = date.replace(/-/g,'');
-  const url = `https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates=${espnDate}`;
+async function fetchLowVigOdds(games, date){
+  // Fetch LowVig.ag moneyline odds via The Odds API proxy
+  // API key is injected server-side — never exposed in frontend
+  const url = `${PROXY_BASE}/odds-api/sports/baseball_mlb/odds/?regions=us&markets=h2h&oddsFormat=american&bookmakers=lowvig`;
   const res = await fetch(url);
-  if(!res.ok) throw new Error(`ESPN ${res.status}`);
+  if(!res.ok) throw new Error(`Odds API ${res.status}`);
   const data = await res.json();
 
   let matched = 0;
-  for(const event of (data.events || [])){
-    const comp = event.competitions?.[0];
-    if(!comp) continue;
+  for(const event of data){
+    const awayName = event.away_team;
+    const homeName = event.home_team;
+    const awayAbr = NAME_TO_ABR[awayName] || awayName.split(' ').pop().slice(0,3).toUpperCase();
+    const homeAbr = NAME_TO_ABR[homeName] || homeName.split(' ').pop().slice(0,3).toUpperCase();
 
-    // Get team abbreviations from ESPN
-    const comps = comp.competitors || [];
-    const awayComp = comps.find(c => c.homeAway === 'away');
-    const homeComp = comps.find(c => c.homeAway === 'home');
-    if(!awayComp || !homeComp) continue;
-
-    const awAbr = espnAbrToOurs(awayComp.team?.abbreviation || '');
-    const hwAbr = espnAbrToOurs(homeComp.team?.abbreviation || '');
-
-    // Find matching game
-    const game = games.find(g => g.away === awAbr && g.home === hwAbr);
+    const game = games.find(g => g.away === awayAbr && g.home === homeAbr);
     if(!game) continue;
 
-    const odds = comp.odds || [];
-    if(!odds.length) continue;
+    const bk = event.bookmakers.find(b => b.key === 'lowvig');
+    if(!bk) continue;
+    const mkt = bk.markets.find(m => m.key === 'h2h');
+    if(!mkt) continue;
 
-    const o = odds[0];
-    // ESPN structure: o.moneyline.away.close.odds / o.moneyline.home.close.odds
-    const awOdds = o.moneyline?.away?.close?.odds ?? o.moneyline?.away?.open?.odds;
-    const hwOdds = o.moneyline?.home?.close?.odds ?? o.moneyline?.home?.open?.odds;
-
-    if(awOdds && hwOdds){
-      game.awayOdds = +awOdds;
-      game.homeOdds = +hwOdds;
+    const ao = mkt.outcomes.find(o => o.name === awayName);
+    const ho = mkt.outcomes.find(o => o.name === homeName);
+    if(ao && ho){
+      game.awayOdds = ao.price;
+      game.homeOdds = ho.price;
       matched++;
     }
   }
-  console.log(`ESPN odds: matched ${matched}/${games.length} games`);
+  console.log(`LowVig odds: matched ${matched}/${games.length} games`);
 }
 
 function espnAbrToOurs(espn){
@@ -2138,7 +2129,7 @@ function rGames(){
             <div class="wp-side">
               <div class="wp-team">${g.away}</div>
               <div class="wp-num ${n(r.awWP)>=0.5?'fav':'dog'}">${awPct}%</div>
-              <div class="wp-detail">Model ${fmtO(r.awMO)} · Mkt ${fmtO(g.awayOdds)}</div>
+              <div class="wp-detail">Model ${fmtO(r.awMO)} · LowVig ${fmtO(g.awayOdds)}</div>
               <div class="wp-edge" style="color:${n(r.awEdge)>=0.03?'var(--green)':n(r.awEdge)<0?'var(--red)':'var(--muted)'}">
                 ${n(r.awEdge)>=0?'+':''}${(n(r.awEdge)*100).toFixed(2)}% edge
               </div>
@@ -2146,7 +2137,7 @@ function rGames(){
             <div class="wp-side">
               <div class="wp-team">${g.home}</div>
               <div class="wp-num ${n(r.hwWP)>=0.5?'fav':'dog'}">${hwPct}%</div>
-              <div class="wp-detail">Model ${fmtO(r.hwMO)} · Mkt ${fmtO(g.homeOdds)}</div>
+              <div class="wp-detail">Model ${fmtO(r.hwMO)} · LowVig ${fmtO(g.homeOdds)}</div>
               <div class="wp-edge" style="color:${n(r.hwEdge)>=0.03?'var(--green)':n(r.hwEdge)<0?'var(--red)':'var(--muted)'}">
                 ${n(r.hwEdge)>=0?'+':''}${(n(r.hwEdge)*100).toFixed(2)}% edge
               </div>
