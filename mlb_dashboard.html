@@ -1102,47 +1102,45 @@ input[type=number] { -moz-appearance:textfield; }
 
 <!-- ══ TEAMS ══ -->
 <div id="panel-teams" class="panel">
+  <div style="display:flex;gap:14px;align-items:flex-start;">
 
-  <!-- Team Selector -->
-  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
-    <div id="team-btns" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-  </div>
+    <!-- LEFT SIDEBAR: Teams by division -->
+    <div id="team-sidebar" style="width:180px;flex-shrink:0;position:sticky;top:60px;align-self:flex-start;max-height:calc(100vh - 80px);overflow-y:auto;">
+    </div>
 
-  <!-- Team Header Card -->
-  <div id="team-header-card" style="margin-bottom:14px;border-radius:6px;overflow:hidden;box-shadow:var(--shadow);">
-    <!-- Colored banner -->
-    <div id="tm-banner" style="position:relative;overflow:hidden;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;min-height:80px;">
-      <img id="tm-logo-bg" src="" alt="" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);width:100px;height:100px;object-fit:contain;opacity:0.2;filter:brightness(10) drop-shadow(0 0 4px rgba(0,0,0,.2));pointer-events:none;" />
-      <div style="position:relative;z-index:1;padding-left:110px;">
-        <div id="tm-name" style="font-size:32px;font-weight:800;color:#fff;letter-spacing:.04em;text-shadow:0 2px 6px rgba(0,0,0,.35);line-height:1;"></div>
-        <div id="tm-full" style="font-size:14px;color:rgba(255,255,255,.8);margin-top:5px;font-style:italic;text-shadow:0 1px 3px rgba(0,0,0,.3);"></div>
+    <!-- RIGHT: Team content -->
+    <div style="flex:1;min-width:0;">
+
+      <!-- Team Header Card -->
+      <div id="team-header-card" style="margin-bottom:14px;border-radius:6px;overflow:hidden;box-shadow:var(--shadow);">
+        <div id="tm-banner" style="position:relative;overflow:hidden;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;min-height:80px;">
+          <img id="tm-logo-bg" src="" alt="" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);width:100px;height:100px;object-fit:contain;opacity:0.45;filter:brightness(10) drop-shadow(0 0 4px rgba(0,0,0,.2));pointer-events:none;" />
+          <div style="position:relative;z-index:1;padding-left:110px;">
+            <div id="tm-name" style="font-size:32px;font-weight:800;color:#fff;letter-spacing:.04em;text-shadow:0 2px 6px rgba(0,0,0,.35);line-height:1;"></div>
+            <div id="tm-full" style="font-size:14px;color:rgba(255,255,255,.8);margin-top:5px;font-style:italic;text-shadow:0 1px 3px rgba(0,0,0,.3);"></div>
+          </div>
+          <div id="tm-stats-row" style="display:flex;gap:10px;flex-wrap:wrap;position:relative;z-index:1;"></div>
+        </div>
       </div>
-      <div id="tm-stats-row" style="display:flex;gap:10px;flex-wrap:wrap;position:relative;z-index:1;"></div>
-    </div>
-  </div>
 
-  <!-- Rotation + Hitters split -->
-  <div class="g2" style="margin-bottom:14px;">
-
-    <!-- ROTATION -->
-    <div class="card">
-      <div class="ct">Rotation — Top 5 Starters</div>
-      <div id="tm-rotation" class="sw" style="max-height:none;"></div>
-      <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
-        <div class="ct" style="margin-bottom:8px;">Bullpen</div>
-        <div id="tm-bullpen" class="sw"></div>
+      <!-- Rotation + Hitters split -->
+      <div class="g2" style="margin-bottom:14px;">
+        <div class="card">
+          <div class="ct">Rotation — Top 5 Starters</div>
+          <div id="tm-rotation" class="sw" style="max-height:none;"></div>
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
+            <div class="ct" style="margin-bottom:8px;">Bullpen</div>
+            <div id="tm-bullpen" class="sw"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="ct">Position Players — Full Depth</div>
+          <div id="tm-hitters" class="sw" style="max-height:none;"></div>
+        </div>
       </div>
-    </div>
+    </div><!-- end right content -->
+  </div><!-- end flex wrapper -->
 
-    <!-- HITTERS -->
-    <div class="card">
-      <div class="ct">Position Players — Full Depth</div>
-      <div id="tm-hitters" class="sw" style="max-height:none;"></div>
-    </div>
-
-  </div>
-
-  <!-- WAR bar charts -->
   <div class="g2">
     <div class="card">
       <div class="ct">Hitter WAR Distribution</div>
@@ -3369,19 +3367,61 @@ let tmCharts = {};
 
 const TEAM_ORDER = ['ARI','ATH','ATL','BAL','BOS','CHC','CHW','CIN','CLE','COL','DET','HOU','KCR','LAA','LAD','MIA','MIL','MIN','NYM','NYY','PHI','PIT','SDP','SEA','SFG','STL','TBR','TEX','TOR','WSN'];
 
+// Division order and membership
+const DIV_SIDEBAR = [
+  { name:'AL East',    id:201, teams:['NYY','BOS','BAL','TOR','TBR'] },
+  { name:'AL Central', id:202, teams:['CLE','MIN','DET','CHW','KCR'] },
+  { name:'AL West',    id:200, teams:['HOU','SEA','TEX','LAA','ATH'] },
+  { name:'NL East',    id:204, teams:['PHI','NYM','ATL','MIA','WSN'] },
+  { name:'NL Central', id:205, teams:['CHC','MIL','STL','PIT','CIN'] },
+  { name:'NL West',    id:203, teams:['LAD','SFG','SDP','ARI','COL'] },
+];
+
 function initTeamBtns(){
-  const wrap = document.getElementById('team-btns');
-  wrap.innerHTML = TEAM_ORDER.map(t =>
-    `<button class="tm-btn ${t===currentTeam?'active':''}" onclick="selectTeam('${t}',this)"
-      style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.08em;padding:5px 10px;border-radius:2px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;transition:.12s;"
-    >${t}</button>`
-  ).join('');
+  renderTeamSidebar();
+}
+
+function renderTeamSidebar(){
+  const sidebar = document.getElementById('team-sidebar');
+  if(!sidebar) return;
+
+  // Build W-L lookup from standings
+  const recordMap = {};
+  if(_standingsData && _standingsData.length){
+    for(const div of _standingsData){
+      for(const t of (div.teamRecords||[])){
+        const abr = MLB_ID_TO_ABR[t.team?.id] || t.team?.abbreviation;
+        if(abr) recordMap[abr] = `${t.wins}-${t.losses}`;
+      }
+    }
+  }
+
+  sidebar.innerHTML = DIV_SIDEBAR.map(div => {
+    const rows = div.teams.map(abr => {
+      const info = TEAM_INFO[abr] || {};
+      const rec = recordMap[abr] || '';
+      const isActive = abr === currentTeam;
+      const activeBg = isActive ? `background:rgba(0,200,240,.10);border-left:3px solid var(--accent);` : 'border-left:3px solid transparent;';
+      return `<div class="tm-btn" data-abr="${abr}" onclick="selectTeam('${abr}',this)"
+        onmouseover="if('${abr}'!==currentTeam)this.style.background='rgba(0,0,0,.04)'"
+        onmouseout="if('${abr}'!==currentTeam)this.style.background=''"
+        style="display:flex;align-items:center;gap:7px;padding:5px 8px;cursor:pointer;border-radius:3px;transition:.1s;${activeBg}">
+        <img src="${teamLogo(abr)}" width="20" height="20" style="object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'" />
+        <span style="font-family:Calibri,sans-serif;font-size:12px;font-weight:${isActive?'700':'600'};color:${isActive?'var(--accent)':info.primary||'var(--text)'};">${abr}</span>
+        <span style="font-family:Calibri,sans-serif;font-size:10px;color:var(--muted);margin-left:auto;">${rec}</span>
+      </div>`;
+    }).join('');
+
+    return `<div style="margin-bottom:10px;">
+      <div style="font-family:Calibri,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:4px 8px 3px;">${div.name}</div>
+      ${rows}
+    </div>`;
+  }).join('');
 }
 
 function selectTeam(abr, btn){
   currentTeam = abr;
-  document.querySelectorAll('.tm-btn').forEach(b=>{ b.style.background='transparent'; b.style.color='var(--muted)'; b.style.borderColor='var(--border2)'; });
-  if(btn){ btn.style.background='rgba(0,200,240,.12)'; btn.style.color='var(--accent)'; btn.style.borderColor='var(--accent)'; }
+  renderTeamSidebar(); // re-render to update active state
   renderTeam(abr);
 }
 
@@ -3878,6 +3918,7 @@ async function fetchStandings(){
     const ts = new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
     status.textContent = 'Updated ' + ts;
     renderStandings();
+    renderTeamSidebar();
   } catch(e) {
     status.textContent = 'Failed: ' + e.message;
     console.error('Standings fetch failed:', e);
