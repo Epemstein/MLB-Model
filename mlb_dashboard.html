@@ -1074,7 +1074,7 @@ input[type=number] { -moz-appearance:textfield; }
 
 <!-- ══ ACTIVITY LOG ══ -->
 <div id="panel-activity" class="panel">
-  <div>
+  <div class="g2">
     <div class="card">
       <div class="ct">Lineup Changes <span id="activity-count-lineup" style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);"></span></div>
       <div class="sw"><table class="dt" style="font-size:11px;">
@@ -1083,7 +1083,7 @@ input[type=number] { -moz-appearance:textfield; }
       </table></div>
     </div>
   </div>
-  <div class="card" style="margin-top:14px;">
+  <div class="card">
     <div class="ct">Bet Logging <span id="activity-count-bets" style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);"></span></div>
     <div class="sw"><table class="dt" style="font-size:11px;">
       <thead><tr><th style="width:130px">Time</th><th style="width:80px">User</th><th>Action</th></tr></thead>
@@ -2327,7 +2327,7 @@ async function sendTelegramPick(pick){
   try {
     const dtYMD    = pick.dt.slice(6,10)+'-'+pick.dt.slice(0,2)+'-'+pick.dt.slice(3,5);
     let br = S.br.start || 10000;
-    try { const brResult = calcAutoStartBR(dtYMD); if(brResult && !isNaN(brResult)) br = brResult; } catch(e){}
+    try { const brResult = calcAutoStartBR(dtYMD); if(brResult && brResult.amount && !isNaN(brResult.amount)) br = brResult.amount; } catch(e){}
     const kellyPct = pick.ku ? Math.min(pick.ku * (S.br.kelly||0.5), S.br.maxPct||3) : 0;
     const riskAmt  = (kellyPct / 100 * br).toFixed(0);
     const winAmt   = pick.od >= 0
@@ -4913,7 +4913,7 @@ function logActivity(action, team, category){
   if(!_currentUser) return;
   if(!category){
     const a = action.toLowerCase();
-    if(a.includes('logged pick') || a.includes('deleted pick') || a.includes('marked pick') || a.includes('edited pick') || a.includes('overnights')) category = 'bets';
+    if(a.includes('logged pick') || a.includes('pick logged') || a.includes('deleted pick') || a.includes('pick deleted') || a.includes('marked pick') || a.includes('pick result') || a.includes('edited pick') || a.includes('pick edited') || a.includes('overnight') ) category = 'bets';
     else category = 'lineup';
   }
   const name = _currentUser.displayName || _currentUser.email;
@@ -4938,7 +4938,7 @@ function renderActivityLog(docs){
   function getCategory(d){
     if(d.category) return d.category;
     const a = (d.action||'').toLowerCase();
-    if(a.includes('logged pick')||a.includes('deleted pick')||a.includes('marked pick')||a.includes('edited pick')) return 'bets';
+    if(a.includes('logged pick')||a.includes('pick logged')||a.includes('deleted pick')||a.includes('pick deleted')||a.includes('marked pick')||a.includes('pick result')||a.includes('edited pick')||a.includes('pick edited')||a.includes('overnight')) return 'bets';
     return 'lineup';
   }
   function buildRows(filtered){
