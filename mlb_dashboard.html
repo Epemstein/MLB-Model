@@ -892,6 +892,11 @@ input[type=number] { -moz-appearance:textfield; }
     <input style="width:220px" type="text" id="ps-h" placeholder="Search player or team…" oninput="rProjH()"/>
     <span style="font-size:11px;color:var(--muted);margin-left:8px;" id="hitter-count"></span>
     <button class="btn bg proj-refresh-btn" onclick="fetchProjections()" style="font-size:11px;padding:6px 10px;margin-left:8px;" title="Fetch latest Steamer projections from FanGraphs">⟳ Projections</button>
+    <input type="date" id="proj-snap-date-h" style="margin-left:12px;padding:4px 6px;font-size:11px;border:1px solid var(--border);border-radius:4px;background:var(--bg2);color:var(--fg);" title="View historical snapshot" onchange="loadProjSnapshot('h',this.value)" />
+    <button onclick="clearProjSnapshot('h')" style="padding:4px 8px;font-size:10px;background:transparent;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--muted);margin-left:4px;" title="Return to live projections">✕ Live</button>
+  </div>
+  <div id="proj-snap-banner-h" style="display:none;background:rgba(0,150,255,.08);border:1px solid var(--accent);border-radius:4px;padding:6px 12px;margin-bottom:8px;font-size:11px;color:var(--accent);">
+    📅 Viewing snapshot — live projections still active for all model calculations
   </div>
   <div class="card" style="padding:0;overflow:hidden;">
     <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">
@@ -920,6 +925,11 @@ input[type=number] { -moz-appearance:textfield; }
     <input style="width:220px" type="text" id="ps-p" placeholder="Search player or team…" oninput="rProjP()"/>
     <span style="font-size:11px;color:var(--muted);margin-left:8px;" id="pitcher-count"></span>
     <button class="btn bg proj-refresh-btn" onclick="fetchProjections()" style="font-size:11px;padding:6px 10px;margin-left:8px;" title="Fetch latest Steamer projections from FanGraphs">⟳ Projections</button>
+    <input type="date" id="proj-snap-date-p" style="margin-left:12px;padding:4px 6px;font-size:11px;border:1px solid var(--border);border-radius:4px;background:var(--bg2);color:var(--fg);" title="View historical snapshot" onchange="loadProjSnapshot('p',this.value)" />
+    <button onclick="clearProjSnapshot('p')" style="padding:4px 8px;font-size:10px;background:transparent;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--muted);margin-left:4px;" title="Return to live projections">✕ Live</button>
+  </div>
+  <div id="proj-snap-banner-p" style="display:none;background:rgba(0,150,255,.08);border:1px solid var(--accent);border-radius:4px;padding:6px 12px;margin-bottom:8px;font-size:11px;color:var(--accent);">
+    📅 Viewing snapshot — live projections still active for all model calculations
   </div>
   <div class="card" style="padding:0;overflow:hidden;">
     <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">
@@ -2865,10 +2875,13 @@ function rProjPEdgeOnly(){
   });
 }
 
-function rProjH(){
+function rProjH(snapData){
+  const source = snapData || PROJ_HITTERS;
   const q = (document.getElementById('ps-h').value||'').toLowerCase();
-  const fh = PROJ_HITTERS.filter(p => p.name.toLowerCase().includes(q) || p.team.toLowerCase().includes(q));
-  document.getElementById('hitter-count').textContent = `(${fh.length} of ${PROJ_HITTERS.length})`;
+  const fh = source.filter(p => p.name.toLowerCase().includes(q) || p.team.toLowerCase().includes(q));
+  document.getElementById('hitter-count').textContent = snapData
+    ? `(${fh.length} of ${source.length} — snapshot)`
+    : `(${fh.length} of ${PROJ_HITTERS.length})`;
   document.getElementById('proj-hitters').innerHTML = fh.map((p,i) => {
     const paG    = p.g > 0 ? p.pa / p.g : 0;
     const warPA  = p.pa > 0 ? p.war / p.pa : 0;
@@ -2887,11 +2900,30 @@ function rProjH(){
   }).join('') || '<tr><td colspan="9" class="nd">No results.</td></tr>';
 }
 
-function rProjP(){
+function rProjP(snapData){
+  const source = snapData || PROJ_PITCHERS;
   const q = (document.getElementById('ps-p').value||'').toLowerCase();
-  const fp = PROJ_PITCHERS.filter(p => p.name.toLowerCase().includes(q) || p.team.toLowerCase().includes(q));
-  document.getElementById('pitcher-count').textContent = `(${fp.length} of ${PROJ_PITCHERS.length})`;
+  const fp = source.filter(p => p.name.toLowerCase().includes(q) || p.team.toLowerCase().includes(q));
+  document.getElementById('pitcher-count').textContent = snapData
+    ? `(${fp.length} of ${source.length} — snapshot)`
+    : `(${fp.length} of ${PROJ_PITCHERS.length})`;
   document.getElementById('proj-pitchers').innerHTML = fp.map((p,i) => {
+    if(snapData){
+      const warIP  = p.ip > 0 ? (p.war / p.ip) : 0;
+      const war162 = p.gs > 0 ? warIP * (p.ip/p.gs) * 32 : 0;
+      return `<tr>
+        <td style="color:var(--muted);font-size:10px">${i+1}</td>
+        <td>${p.name}</td>
+        <td><span class="tag pend">${p.team}</span></td>
+        <td style="text-align:right;font-family:var(--mono)">${p.g}</td>
+        <td style="text-align:right;font-family:var(--mono)">${p.gs}</td>
+        <td style="text-align:right;font-family:var(--mono)">${p.ip}</td>
+        <td style="text-align:right;font-family:var(--mono)">${p.war.toFixed(2)}</td>
+        <td style="text-align:right;font-family:var(--mono)">${(p.ip/Math.max(p.gs,1)).toFixed(2)}</td>
+        <td style="text-align:right;font-family:var(--mono)">${warIP.toFixed(4)}</td>
+        <td style="text-align:right;font-family:var(--mono)">${war162.toFixed(2)}</td>
+      </tr>`;
+    }
     const ipStart = getIpStart(p);
     const warIP   = p.ip > 0 ? (p.war / p.ip) : 0;
     const war162  = getPitcherWar162(p);
@@ -2917,6 +2949,7 @@ function rProjP(){
     </tr>`;
   }).join('') || '<tr><td colspan="10" class="nd">No results.</td></tr>';
 }
+
 
 // ═══════════════════════════════════════════════
 // BANKROLL
@@ -3586,6 +3619,12 @@ async function fetchProjections(force=false){
     const ts = new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
     const el = document.getElementById('tools-proj-status');
     if(el) el.textContent = `Last refreshed: ${ts} — ${payload.bat?.length||0} hitters, ${payload.pit?.length||0} pitchers loaded.`;
+    // Save daily snapshot to Firestore silently
+    try {
+      const snapDate = getActiveDate();
+      db.collection('proj_snapshots').doc(snapDate).set({ bat: payload.bat, pit: payload.pit, slim: true, saved: Date.now() });
+      console.log('Projection snapshot saved for', snapDate);
+    } catch(snapErr){ console.warn('Snapshot save failed:', snapErr); }
     toast('Projections updated ✓');
   } catch(e) {
     console.error('Projection fetch failed:', e);
@@ -3644,6 +3683,57 @@ function applyProjections(payload){
   if(document.getElementById('panel-proj-p').classList.contains('active')) rProjP();
   if(document.getElementById('panel-teams').classList.contains('active')) renderTeam(currentTeam);
   rGames();
+}
+
+// ── Projection Snapshot Viewer ────────────────────────────────────────────
+// Snapshot data for display only — never affects PROJ_HITTERS/PROJ_PITCHERS
+let _snapHitters = null;
+let _snapPitchers = null;
+
+async function loadProjSnapshot(tab, dateYMD){
+  if(!dateYMD){ clearProjSnapshot(tab); return; }
+  const banner = document.getElementById('proj-snap-banner-' + tab);
+  if(banner) banner.style.display = 'none';
+
+  try {
+    const snap = await db.collection('proj_snapshots').doc(dateYMD).get();
+    if(!snap.exists){
+      toast('No snapshot saved for ' + dateYMD, 'err');
+      document.getElementById('proj-snap-date-' + tab).value = '';
+      return;
+    }
+    const data = snap.data();
+    // Parse slim format into display objects
+    const snapH = (data.bat||[]).map(r => ({name:r[0], team:r[1], g:r[2], pa:r[3], war:r[4]}));
+    const snapP = (data.pit||[]).map(r => ({name:r[0], team:r[1], g:r[2], gs:r[3], ip:r[4], war:r[5]}));
+
+    if(tab === 'h'){
+      _snapHitters = snapH;
+      if(banner){ banner.textContent = `📅 Snapshot: ${dateYMD} (${snapH.length} hitters) — live projections still active for model`; banner.style.display = 'block'; }
+      rProjH(snapH);
+    } else {
+      _snapPitchers = snapP;
+      if(banner){ banner.textContent = `📅 Snapshot: ${dateYMD} (${snapP.length} pitchers) — live projections still active for model`; banner.style.display = 'block'; }
+      rProjP(snapP);
+    }
+  } catch(e){
+    console.error('Snapshot load failed:', e);
+    toast('Snapshot load failed: ' + e.message, 'err');
+  }
+}
+
+function clearProjSnapshot(tab){
+  if(tab === 'h'){
+    _snapHitters = null;
+    const d = document.getElementById('proj-snap-date-h'); if(d) d.value = '';
+    const b = document.getElementById('proj-snap-banner-h'); if(b) b.style.display = 'none';
+    rProjH();
+  } else {
+    _snapPitchers = null;
+    const d = document.getElementById('proj-snap-date-p'); if(d) d.value = '';
+    const b = document.getElementById('proj-snap-banner-p'); if(b) b.style.display = 'none';
+    rProjP();
+  }
 }
 
 // On load: use cache if fresh, auto-fetch if stale or missing
