@@ -2141,12 +2141,12 @@ function rGames(){
 
       <div class="gc-teams">
         <div class="gc-team-hdr away" style="background:${awCardColor}" onclick="toggleDrawer('${gid}')">
-          <img class="team-logo-bg" src="${awLogo}" alt="" width="62" height="62" onerror="this.style.display='none'" />
+          <img class="team-logo-bg" src="${awLogo}" alt="" width="62" height="62" style="opacity:1;filter:none;" onerror="this.style.display='none'" />
           <span class="team-hdr-name" style="padding-left:52px;padding-right:0;">${g.away}</span>
           <div class="win-pct-block"><div class="win-pct">${awPct}%</div><div class="win-implied">${fmtO(r.awMO)}</div></div>
         </div>
         <div class="gc-team-hdr home" style="background:${hwCardColor};flex-direction:row-reverse;" onclick="toggleDrawer('${gid}')">
-          <img class="team-logo-bg" src="${hwLogo}" alt="" width="62" height="62" style="left:auto;right:6px;" onerror="this.style.display='none'" />
+          <img class="team-logo-bg" src="${hwLogo}" alt="" width="62" height="62" style="left:auto;right:6px;opacity:1;filter:none;" onerror="this.style.display='none'" />
           <span class="team-hdr-name" style="padding-left:0;padding-right:52px;text-align:right;">${g.home}</span>
           <div class="win-pct-block" style="align-items:flex-start;"><div class="win-pct">${hwPct}%</div><div class="win-implied">${fmtO(r.hwMO)}</div></div>
         </div>
@@ -3614,7 +3614,7 @@ const TEAM_INFO = {
   'HOU': {primary:'#002D62', secondary:'#EB6E1F', espn:'hou',  name:'Houston Astros'},
   'KCR': {primary:'#004687', secondary:'#C09A5B', card:'#C09A5B', espn:'kc',   name:'Kansas City Royals'},
   'LAA': {primary:'#BA0021', secondary:'#003263', espn:'laa',  name:'Los Angeles Angels'},
-  'LAD': {primary:'#005A9C', secondary:'#EF3E42', card:'#EF3E42', espn:'lad',  name:'Los Angeles Dodgers'},
+  'LAD': {primary:'#005A9C', secondary:'#EF3E42', card:'#A5ACAF', espn:'lad',  name:'Los Angeles Dodgers'},
   'MIA': {primary:'#00A3E0', secondary:'#EF3340', espn:'mia',  name:'Miami Marlins'},
   'MIL': {primary:'#12284B', secondary:'#FFC52F', espn:'mil',  name:'Milwaukee Brewers'},
   'MIN': {primary:'#002B5C', secondary:'#D31145', card:'#D31145', espn:'min',  name:'Minnesota Twins'},
