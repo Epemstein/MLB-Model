@@ -2802,6 +2802,10 @@ function spSubLabel(gid, side){
 function revertSP(gid, side){
   const g = S.games.find(g=>String(g.id)===String(gid));
   if(!g) return;
+  const revertTeam = side==='aw' ? g.away : g.home;
+  // Capture names BEFORE mutation
+  const removedSP  = side==='aw' ? g.awaySpName : g.homeSpName;   // the swap-in (Joe Ryan)
+  const restoredSP = side==='aw' ? g.awaySpOrig : g.homeSpOrig;   // the original (Woods Richardson)
   if(side==='aw' && g.awaySpOrig){
     const sp = findPitcher(g.away, g.awaySpOrig);
     g.awaySpName = g.awaySpOrig; g.awaySpWar = sp?.war162||0;
@@ -2811,10 +2815,7 @@ function revertSP(gid, side){
     g.homeSpName = g.homeSpOrig; g.homeSpWar = sp?.war162||0;
     delete g.homeSpManual; delete g.homeSpOrig;
   }
-  const revertTeam = side==='aw' ? g.away : g.home;
-  const revertedSP = side==='aw' ? g.awaySpName : g.homeSpName;
-  const restoredSP = side==='aw' ? g.awaySpOrig : g.homeSpOrig;
-  logActivity(`Reverted ${revertTeam} SP: removed ${revertedSP}, restored ${restoredSP||'original'}`, revertTeam);
+  logActivity(`Reverted ${revertTeam} SP: removed ${removedSP}, restored ${restoredSP||'original'}`, revertTeam);
   save(); rGames();
 }
 function onDateChange(){
