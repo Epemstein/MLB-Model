@@ -3528,7 +3528,12 @@ function showPanel(name,btn){
   if(name==='proj-p')rProjP();
   if(name==='br')rBRChart();
   if(name==='baseline'){renderBaseline();}
-  if(name==='standings'){fetchStandings();}
+  if(name==='standings'){
+    // Only fetch if not loaded yet or data is >4 hours old
+    const stale = !_standingsData || !_standingsData.length || (Date.now() - (_standingsFetchedAt||0)) > 4*60*60*1000;
+    if(stale) fetchStandings();
+    else renderStandings();
+  }
   if(name==='activity'){loadActivityLog();}
 }
 function toast(msg, type){
@@ -4107,6 +4112,7 @@ function clearProjSnapshot(tab){
 // STANDINGS
 // ═══════════════════════════════════════════════
 let _standingsData = null;
+let _standingsFetchedAt = 0;
 let _standingsLeague = 'AL';
 
 function showLeague(lg, btn){
@@ -4127,6 +4133,7 @@ async function fetchStandings(){
     if(!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     _standingsData = data.records || [];
+    _standingsFetchedAt = Date.now();
     _projWinsCache = null; // force recalculate with fresh games-played data
     const ts = new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
     status.textContent = 'Updated ' + ts;
