@@ -4176,6 +4176,8 @@ async function fetchStandings(){
     const data = await res.json();
     _standingsData = data.records || [];
     _standingsFetchedAt = Date.now();
+    localStorage.setItem('mlb_standings_cache', JSON.stringify(_standingsData));
+    localStorage.setItem('mlb_standings_ts', String(_standingsFetchedAt));
     _projWinsCache = null; // force recalculate with fresh games-played data
     const ts = new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
     status.textContent = 'Updated ' + ts;
@@ -4767,10 +4769,22 @@ async function loadFromFirebase(){
 
     // Initial render
     rGames(); rPerf(); loadBRUI();
-    // Show pending indicator until standings load
-    const _ind = document.getElementById('standings-pending-indicator');
-    if(_ind) _ind.style.display = '';
-    fetchStandings();
+    // Only fetch standings if not cached or >4 hours old
+    const _standingsAge = Date.now() - (+localStorage.getItem('mlb_standings_ts')||0);
+    const _standingsCached = localStorage.getItem('mlb_standings_cache');
+    if(_standingsAge < 4*60*60*1000 && _standingsCached){
+      try{
+        _standingsData = JSON.parse(_standingsCached);
+        _standingsFetchedAt = +localStorage.getItem('mlb_standings_ts');
+        _projWinsCache = null;
+        renderStandings(); renderTeamSidebar(); rGames(); renderBaseline();
+        console.log('Standings loaded from cache');
+      } catch(e){ fetchStandings(); }
+    } else {
+      const _ind = document.getElementById('standings-pending-indicator');
+      if(_ind) _ind.style.display = '';
+      fetchStandings();
+    }
 
     // Now set up real-time listeners (picks + activity)
     setupRealtimeListeners();
