@@ -768,6 +768,7 @@ input[type=number] { -moz-appearance:textfield; }
   <button onclick="showPanel('activity',this)">Activity</button>
   <button onclick="showPanel('tools',this)">Tools</button>
 </nav>
+<div id="standings-pending-indicator" style="display:none;background:#7c5800;color:#ffe082;font-size:11px;font-family:var(--mono);padding:6px 20px;text-align:center;">⚠ Standings loading — projected wins and edges may be slightly off until complete</div>
 
 <main>
 
@@ -783,7 +784,6 @@ input[type=number] { -moz-appearance:textfield; }
     <button class="btn bp" id="fetch-btn" onclick="fetchMLBGames()">↻ Fetch</button>
     <button class="btn bg" onclick="S.games=[];save();rGames();">Clear</button>
     <span class="api-status" id="api-status"></span>
-    <span id="standings-pending-indicator" style="display:none;font-size:10px;font-family:var(--mono);color:var(--yellow);margin-left:6px;" title="Standings not yet loaded — projected wins and edges may be slightly off">⚠ standings loading…</span>
   </div>
 
   <!-- ODDS TABLE + GAME CARDS side by side -->
