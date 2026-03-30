@@ -1897,7 +1897,7 @@ function buildSpOverrides(){
 }
 
 function setSP(gameId, field, val){
-  if(_currentUser && (field==='awName' || field==='hwName')){ logActivity(`Changed SP to ${val}`); }
+  // SP changes logged via confirmSP
   if(!S.spOverrides[gameId]) S.spOverrides[gameId]={};
   S.spOverrides[gameId][field]=val;
   save();
@@ -2315,7 +2315,7 @@ function addPick(){
   const newPick={id:Date.now(),dt,gt,tx,opp,ha,od,ed:edFinal,xwp,un,ku,rs,uw,kuw,tp};
   S.picks.push(newPick);
   savePickToFirebase(newPick);
-  logActivity(`Logged pick: ${newPick.tx} ${newPick.od>0?'+':''}${newPick.od} (${newPick.rs})`, newPick.tx);
+  logActivity(`Pick logged: ${newPick.tx} ${newPick.od>0?'+':''}${newPick.od} vs ${newPick.opp} (${newPick.dt.slice(0,5)})`, newPick.tx);
   localStorage.setItem('mlb26v3',JSON.stringify(S));
   rPicks();rPerf();
   if(document.getElementById("panel-kelly-tracker").classList.contains("active")) renderKellyTracker();
@@ -2339,13 +2339,13 @@ function setPickView(view, btn){
   rPicks();
 }
 
-function delPick(id){const dp=S.picks.find(p=>p.id===id);if(dp)logActivity(`Deleted pick: ${dp.tx} ${dp.od>0?'+':''}${dp.od}`, dp.tx);S.picks=S.picks.filter(p=>p.id!==id);deletePickFromFirebase(id);localStorage.setItem('mlb26v3',JSON.stringify(S));rPicks();rPerf();}
+function delPick(id){const dp=S.picks.find(p=>p.id===id);if(dp)logActivity(`Pick deleted: ${dp.tx} ${dp.od>0?'+':''}${dp.od} vs ${dp.opp} (${dp.dt.slice(0,5)})`, dp.tx);S.picks=S.picks.filter(p=>p.id!==id);deletePickFromFirebase(id);localStorage.setItem('mlb26v3',JSON.stringify(S));rPicks();rPerf();}
 function updPick(id,rs){
   const p=S.picks.find(p=>p.id===id);if(!p)return;
   const oldRs = p.rs;
   p.rs=rs;p.uw=calcWon(p.od,p.un,rs);p.kuw=calcWon(p.od,p.ku||0,rs);
   savePickToFirebase(p);
-  logActivity(`Marked pick ${p.tx} as ${rs} (was ${oldRs})`, p.tx);
+  logActivity(`Pick result: ${p.tx} ${p.od>0?'+':''}${p.od} vs ${p.opp} → ${rs} (${p.dt.slice(0,5)})`, p.tx);
   localStorage.setItem('mlb26v3',JSON.stringify(S));
   rPicks();rPerf();
   if(document.getElementById("panel-kelly-tracker").classList.contains("active")) renderKellyTracker();
@@ -2706,7 +2706,7 @@ function doSwap(playerName, s600, war){
     g.lineupOverrides[key] = {name: playerName, s600, war: warFinal, war162, manual: true, original: orig, origS600, origWar};
   }
   save();
-  logActivity(`Edited ${swapCtx.team} lineup: swapped in ${playerName} for ${outName}`, swapCtx.team);
+  logActivity(`${swapCtx.team} lineup: ${outName} → ${playerName} (${getActiveDate().slice(5,7)}/${getActiveDate().slice(8,10)})`, swapCtx.team);
   closeSwapModal();
   rGames();
 }
@@ -2724,7 +2724,7 @@ function revertSwap(gid, side, slotIdx){
   } else {
     delete g.lineupOverrides[key];
   }
-  logActivity(`Reverted ${g.away||gid} lineup: removed ${revertedName}, restored ${restoredName}`, g.away);
+  logActivity(`${g.away||gid} lineup revert: ${revertedName} → ${restoredName} (${getActiveDate().slice(5,7)}/${getActiveDate().slice(8,10)})`, g.away);
   save();
   rGames();
 }
@@ -2790,7 +2790,7 @@ function doSpSwap(name, war162){
   save();
   closeSwapModal();
   rGames();
-  logActivity(`Changed ${spCtx.team} SP: ${oldSpName||'TBD'} → ${name}`, spCtx.team);
+  logActivity(`${spCtx.team} SP: ${oldSpName||'TBD'} → ${name} (${getActiveDate().slice(5,7)}/${getActiveDate().slice(8,10)})`, spCtx.team);
 }
 
 function spSubLabel(gid, side){
@@ -2816,7 +2816,7 @@ function revertSP(gid, side){
     g.homeSpName = g.homeSpOrig; g.homeSpWar = sp?.war162||0;
     delete g.homeSpManual; delete g.homeSpOrig;
   }
-  logActivity(`Reverted ${revertTeam} SP: removed ${removedSP}, restored ${restoredSP||'original'}`, revertTeam);
+  logActivity(`${revertTeam} SP revert: ${removedSP} → ${restoredSP||'original'} (${getActiveDate().slice(5,7)}/${getActiveDate().slice(8,10)})`, revertTeam);
   save(); rGames();
 }
 function onDateChange(){
@@ -2931,8 +2931,8 @@ function getPitcherWar162(p){
 function setIpOverride(name, team, val){
   const _ipN = parseFloat(val);
   const isRevert2 = isNaN(_ipN) || _ipN <= 0;
-  if(_currentUser && isRevert2) logActivity(`Reverted IP/Start: ${name} (${team})`, team);
-  else if(_currentUser && !isRevert2 && val.trim().length > 0) logActivity(`Set IP/Start: ${name} (${team}) → ${val}`, team);
+  if(_currentUser && isRevert2) logActivity(`IP/Start revert: ${name} (${team}, ${getActiveDate().slice(5,7)}/${getActiveDate().slice(8,10)})`, team);
+  else if(_currentUser && !isRevert2 && val.trim().length > 0) logActivity(`IP/Start: ${name} (${team}) → ${val} (${getActiveDate().slice(5,7)}/${getActiveDate().slice(8,10)})`, team);
   const key = name + '|' + team;
   const n = parseFloat(val);
   const isRevert = isNaN(n) || n <= 0;
@@ -4239,7 +4239,7 @@ function saveEditPick(){
   p.uw  = calcWon(p.od, p.un, p.rs);
   p.kuw = calcWon(p.od, p.ku||0, p.rs);
   savePickToFirebase(p);
-  logActivity(`Edited pick: ${p.tx} ${p.od>0?'+':''}${p.od} → ${p.rs}`, p.tx);
+  logActivity(`Pick edited: ${p.tx} ${p.od>0?'+':''}${p.od} vs ${p.opp} → ${p.rs} (${p.dt.slice(0,5)})`, p.tx);
   localStorage.setItem('mlb26v3',JSON.stringify(S));
   closeEditPick();
   rPicks();
