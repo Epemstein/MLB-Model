@@ -2104,6 +2104,8 @@ function rGames(){
     // Team colors and logos
     const awInfo = TEAM_INFO[g.away]||{primary:'#333',secondary:'#666',espn:g.away.toLowerCase()};
     const hwInfo = TEAM_INFO[g.home]||{primary:'#333',secondary:'#666',espn:g.home.toLowerCase()};
+    const awCardColor = awInfo.card || awInfo.primary;
+    const hwCardColor = hwInfo.card || hwInfo.primary;
     const awLogo = teamLogo(g.away);
     const hwLogo = teamLogo(g.home);
 
@@ -2138,12 +2140,12 @@ function rGames(){
       </div>
 
       <div class="gc-teams">
-        <div class="gc-team-hdr away" style="background:${awInfo.primary}" onclick="toggleDrawer('${gid}')">
+        <div class="gc-team-hdr away" style="background:${awCardColor}" onclick="toggleDrawer('${gid}')">
           <img class="team-logo-bg" src="${awLogo}" alt="" width="62" height="62" onerror="this.style.display='none'" />
           <span class="team-hdr-name" style="padding-left:52px;padding-right:0;">${g.away}</span>
           <div class="win-pct-block"><div class="win-pct">${awPct}%</div><div class="win-implied">${fmtO(r.awMO)}</div></div>
         </div>
-        <div class="gc-team-hdr home" style="background:${hwInfo.primary};flex-direction:row-reverse;" onclick="toggleDrawer('${gid}')">
+        <div class="gc-team-hdr home" style="background:${hwCardColor};flex-direction:row-reverse;" onclick="toggleDrawer('${gid}')">
           <img class="team-logo-bg" src="${hwLogo}" alt="" width="62" height="62" style="left:auto;right:6px;" onerror="this.style.display='none'" />
           <span class="team-hdr-name" style="padding-left:0;padding-right:52px;text-align:right;">${g.home}</span>
           <div class="win-pct-block" style="align-items:flex-start;"><div class="win-pct">${hwPct}%</div><div class="win-implied">${fmtO(r.hwMO)}</div></div>
@@ -3599,7 +3601,7 @@ function toast(msg, type){
 const PROJ_WINS_ALL={LAD:98.4,TOR:90.9,NYM:90.9,NYY:90.8,SEA:88.8,BOS:86.7,DET:87.0,PHI:86.6,ATL:86.5,BAL:86.4,HOU:85.2,KCR:84.8,MIL:82.1,MIN:83.0,SDP:81.9,TEX:81.5,CIN:79.4,STL:78.3,CHC:79.8,CLE:79.2,SFG:77.1,MIA:70.1,ARI:75.8,PIT:74.2,TBR:72.0,LAA:71.0,COL:60.1,CHW:63.4,WSN:73.5,ATH:76.5};
 const TEAM_INFO = {
   'ARI': {primary:'#A71930', secondary:'#E3D4AD', espn:'ari',  name:'Arizona Diamondbacks'},
-  'ATH': {primary:'#003831', secondary:'#EFB21E', espn:'oak',  name:'Athletics'},
+  'ATH': {primary:'#003831', secondary:'#EFB21E', card:'#EFB21E', espn:'oak',  name:'Athletics'},
   'ATL': {primary:'#CE1141', secondary:'#13274F', espn:'atl',  name:'Atlanta Braves'},
   'BAL': {primary:'#DF4601', secondary:'#000000', espn:'bal',  name:'Baltimore Orioles'},
   'BOS': {primary:'#BD3039', secondary:'#0C2340', espn:'bos',  name:'Boston Red Sox'},
@@ -3610,21 +3612,21 @@ const TEAM_INFO = {
   'COL': {primary:'#33006F', secondary:'#C4CED4', espn:'col',  name:'Colorado Rockies'},
   'DET': {primary:'#0C2340', secondary:'#FA4616', espn:'det',  name:'Detroit Tigers'},
   'HOU': {primary:'#002D62', secondary:'#EB6E1F', espn:'hou',  name:'Houston Astros'},
-  'KCR': {primary:'#004687', secondary:'#C09A5B', espn:'kc',   name:'Kansas City Royals'},
+  'KCR': {primary:'#004687', secondary:'#C09A5B', card:'#C09A5B', espn:'kc',   name:'Kansas City Royals'},
   'LAA': {primary:'#BA0021', secondary:'#003263', espn:'laa',  name:'Los Angeles Angels'},
-  'LAD': {primary:'#005A9C', secondary:'#EF3E42', espn:'lad',  name:'Los Angeles Dodgers'},
+  'LAD': {primary:'#005A9C', secondary:'#EF3E42', card:'#EF3E42', espn:'lad',  name:'Los Angeles Dodgers'},
   'MIA': {primary:'#00A3E0', secondary:'#EF3340', espn:'mia',  name:'Miami Marlins'},
   'MIL': {primary:'#12284B', secondary:'#FFC52F', espn:'mil',  name:'Milwaukee Brewers'},
-  'MIN': {primary:'#002B5C', secondary:'#D31145', espn:'min',  name:'Minnesota Twins'},
+  'MIN': {primary:'#002B5C', secondary:'#D31145', card:'#D31145', espn:'min',  name:'Minnesota Twins'},
   'NYM': {primary:'#002D72', secondary:'#FF5910', espn:'nym',  name:'New York Mets'},
-  'NYY': {primary:'#003087', secondary:'#C4CED4', espn:'nyy',  name:'New York Yankees'},
-  'PHI': {primary:'#E81828', secondary:'#002D72', espn:'phi',  name:'Philadelphia Phillies'},
+  'NYY': {primary:'#003087', secondary:'#C4CED4', card:'#C4CED4', espn:'nyy',  name:'New York Yankees'},
+  'PHI': {primary:'#E81828', secondary:'#002D72', card:'#002D72', espn:'phi',  name:'Philadelphia Phillies'},
   'PIT': {primary:'#27251F', secondary:'#FDB827', espn:'pit',  name:'Pittsburgh Pirates'},
-  'SDP': {primary:'#2F241D', secondary:'#FFC425', espn:'sd',   name:'San Diego Padres'},
+  'SDP': {primary:'#2F241D', secondary:'#FFC425', card:'#FFC425', espn:'sd',   name:'San Diego Padres'},
   'SEA': {primary:'#0C2C56', secondary:'#005C5C', espn:'sea',  name:'Seattle Mariners'},
-  'SFG': {primary:'#FD5A1E', secondary:'#27251F', espn:'sf',   name:'San Francisco Giants'},
-  'STL': {primary:'#C41E3A', secondary:'#0C2340', espn:'stl',  name:'St. Louis Cardinals'},
-  'TBR': {primary:'#092C5C', secondary:'#8FBCE6', espn:'tb',   name:'Tampa Bay Rays'},
+  'SFG': {primary:'#FD5A1E', secondary:'#27251F', card:'#27251F', espn:'sf',   name:'San Francisco Giants'},
+  'STL': {primary:'#C41E3A', secondary:'#0C2340', card:'#0C2340', espn:'stl',  name:'St. Louis Cardinals'},
+  'TBR': {primary:'#092C5C', secondary:'#8FBCE6', card:'#8FBCE6', espn:'tb',   name:'Tampa Bay Rays'},
   'TEX': {primary:'#003278', secondary:'#C0111F', espn:'tex',  name:'Texas Rangers'},
   'TOR': {primary:'#134A8E', secondary:'#1D2D5C', espn:'tor',  name:'Toronto Blue Jays'},
   'WSN': {primary:'#AB0003', secondary:'#14225A', espn:'wsh',  name:'Washington Nationals'},
