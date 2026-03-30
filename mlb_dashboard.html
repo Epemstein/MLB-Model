@@ -2584,7 +2584,9 @@ async function runOvernights(){
     });
     localStorage.setItem('mlb26v3', JSON.stringify(S));
     rOvernights();
-    logActivity(`Logged ${filtered.length} overnight picks for ${tomorrowMDY}`, '', 'lineup');
+    const pickSummary = filtered.map(p => `${p.tx} ${p.od > 0 ? '+' : ''}${p.od}`).join(', ');
+    const allTeams = filtered.map(p => p.tx);
+    logActivity(`Overnights (${tomorrowMDY}): ${pickSummary}`, allTeams, 'bets');
     status.textContent = `✓ Logged ${filtered.length} picks for ${tomorrowMDY}`;
     toast(`${filtered.length} overnight picks logged ✓`);
 
@@ -4837,24 +4839,26 @@ function showActivityToast(name, action, team){
 
 function logActivity(action, team, category){
   if(!_currentUser) return;
-  // Auto-detect category if not specified
   if(!category){
     const a = action.toLowerCase();
-    if(a.includes('logged pick') || a.includes('deleted pick') || a.includes('marked pick') || a.includes('edited pick')) category = 'bets';
+    if(a.includes('logged pick') || a.includes('deleted pick') || a.includes('marked pick') || a.includes('edited pick') || a.includes('overnights')) category = 'bets';
     else category = 'lineup';
   }
   const name = _currentUser.displayName || _currentUser.email;
+  // team can be a string or array of strings
+  const teamsArr = Array.isArray(team) ? team : (team ? [team] : []);
   const entry = {
-    uid:    _currentUser.uid,
+    uid:      _currentUser.uid,
     name,
-    photo:  _currentUser.photoURL || '',
+    photo:    _currentUser.photoURL || '',
     action,
-    team:   team || '',
+    team:     teamsArr[0] || '',
+    teams:    teamsArr,
     category,
-    ts:     firebase.firestore.FieldValue.serverTimestamp(),
-    tsMs:   Date.now()
+    ts:       firebase.firestore.FieldValue.serverTimestamp(),
+    tsMs:     Date.now()
   };
-  showActivityToast(name, action, team);
+  showActivityToast(name, action, teamsArr[0] || '');
   db.collection('activity').add(entry).catch(e => console.error('Activity log error:', e));
 }
 
@@ -4869,7 +4873,8 @@ function renderActivityLog(docs){
     if(!filtered.length) return '<tr><td colspan="3" class="nd">None yet.</td></tr>';
     return filtered.map(d => {
       const ts = d.ts?.toDate ? d.ts.toDate().toLocaleString('en-US',{month:'2-digit',day:'2-digit',hour:'numeric',minute:'2-digit'}) : '—';
-      const logoHtml = d.team ? `<img src="${teamLogo(d.team)}" width="14" height="14" style="object-fit:contain;vertical-align:middle;margin-right:4px;" onerror="this.style.display='none'" />` : '';
+      const teamsToShow = (d.teams && d.teams.length) ? d.teams : (d.team ? [d.team] : []);
+      const logoHtml = teamsToShow.map(t => `<img src="${teamLogo(t)}" width="14" height="14" style="object-fit:contain;vertical-align:middle;margin-right:3px;" onerror="this.style.display='none'" />`).join('');
       return `<tr>
         <td style="color:var(--muted);font-size:10px;white-space:nowrap">${ts}</td>
         <td style="white-space:nowrap"><img src="${d.photo||''}" width="16" height="16" style="border-radius:50%;vertical-align:middle;margin-right:4px;" onerror="this.style.display='none'" />${(d.name||'?').split(' ')[0]}</td>
