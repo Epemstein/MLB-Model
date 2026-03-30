@@ -83,8 +83,8 @@ nav button {
   transition: color .12s;
   letter-spacing: .01em;
 }
-nav button:hover { color: var(--text); }
-nav button.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+nav button:hover { color: var(--text); background: rgba(0,0,0,.04); border-radius: 4px 4px 0 0; }
+nav button.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; background: rgba(0,150,240,.06); border-radius: 4px 4px 0 0; }
 
 /* ── MAIN ── */
 main { padding: 16px 20px; max-width: 1400px; margin: 0 auto; }
@@ -204,9 +204,9 @@ main { padding: 16px 20px; max-width: 1400px; margin: 0 auto; }
   width: 62px;
   height: 62px;
   object-fit: contain;
-  opacity: 0.22;
+  opacity: 0.45;
   pointer-events: none;
-  filter: brightness(1.2) drop-shadow(0 0 2px rgba(0,0,0,.3));
+  filter: brightness(1.05) drop-shadow(0 0 2px rgba(0,0,0,.15));
 }
 
 .team-hdr-name {
@@ -754,18 +754,18 @@ input[type=number] { -moz-appearance:textfield; }
 </header>
 
 <nav>
-  <button class="active" onclick="showPanel('games',this)">⚡ Games</button>
-  <button onclick="showPanel('picks',this)">📋 Daily Picks</button>
-  <button onclick="showPanel('kelly-tracker',this)">💵 Kelly</button>
-  <button onclick="showPanel('perf',this)">📈 Performance</button>
-  <button onclick="showPanel('proj-h',this)">⚾ Hitters</button>
-  <button onclick="showPanel('proj-p',this)">🎯 Pitchers</button>
-  <button onclick="showPanel('br',this)">💰 Bankroll</button>
-  <button onclick="showPanel('teams',this)">🏟 Teams</button>
-  <button onclick="showPanel('baseline',this)">📊 Baseline</button>
-  <button onclick="showPanel('standings',this)">🏆 Standings</button>
-  <button onclick="showPanel('activity',this)">📜 Activity</button>
-  <button onclick="showPanel('tools',this)">🔧 Tools</button>
+  <button class="active" onclick="showPanel('games',this)">Games</button>
+  <button onclick="showPanel('picks',this)">Daily Picks</button>
+  <button onclick="showPanel('kelly-tracker',this)">Kelly</button>
+  <button onclick="showPanel('perf',this)">Performance</button>
+  <button onclick="showPanel('proj-h',this)">Hitters</button>
+  <button onclick="showPanel('proj-p',this)">Pitchers</button>
+  <button onclick="showPanel('br',this)">Bankroll</button>
+  <button onclick="showPanel('teams',this)">Teams</button>
+  <button onclick="showPanel('baseline',this)">Baseline</button>
+  <button onclick="showPanel('standings',this)">Standings</button>
+  <button onclick="showPanel('activity',this)">Activity</button>
+  <button onclick="showPanel('tools',this)">Tools</button>
 </nav>
 
 <main>
@@ -1038,15 +1038,27 @@ input[type=number] { -moz-appearance:textfield; }
 
 <!-- ══ ACTIVITY LOG ══ -->
 <div id="panel-activity" class="panel">
-  <div class="card">
-    <div class="ct">Activity Log <span id="activity-count" style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);"></span></div>
+  <div class="g2" style="gap:14px;">
+    <div class="card">
+      <div class="ct">Logins <span id="activity-count-login" style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);"></span></div>
+      <div class="sw"><table class="dt" style="font-size:11px;">
+        <thead><tr><th style="width:130px">Time</th><th style="width:80px">User</th><th>Action</th></tr></thead>
+        <tbody id="activity-body-login"><tr><td colspan="3" class="nd">No logins yet.</td></tr></tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="ct">Lineup Changes <span id="activity-count-lineup" style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);"></span></div>
+      <div class="sw"><table class="dt" style="font-size:11px;">
+        <thead><tr><th style="width:130px">Time</th><th style="width:80px">User</th><th>Action</th></tr></thead>
+        <tbody id="activity-body-lineup"><tr><td colspan="3" class="nd">No lineup changes yet.</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px;">
+    <div class="ct">Bet Logging <span id="activity-count-bets" style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);"></span></div>
     <div class="sw"><table class="dt" style="font-size:11px;">
-      <thead><tr>
-        <th style="width:130px">Time</th>
-        <th style="width:80px">User</th>
-        <th>Action</th>
-      </tr></thead>
-      <tbody id="activity-body"><tr><td colspan="3" class="nd">No activity yet.</td></tr></tbody>
+      <thead><tr><th style="width:130px">Time</th><th style="width:80px">User</th><th>Action</th></tr></thead>
+      <tbody id="activity-body-bets"><tr><td colspan="3" class="nd">No bets logged yet.</td></tr></tbody>
     </table></div>
   </div>
 </div>
@@ -1791,9 +1803,8 @@ async function fetchOdds(){
     document.getElementById('hdr-fetch').textContent = S.lastFetch;
     status.className='api-status ok';
     status.textContent=`✓ ${S.games.length} games loaded`;
-    logActivity(`Fetched lineups: ${S.games.length} games loaded`);
+    logActivity(`Fetched slate: ${S.games.length} games for ${date}`, '', 'lineup');
     rGames();
-    logActivity(`Fetched lineups: ${S.games.length} games loaded`);
   }catch(err){
     console.error(err);
     status.className='api-status err';
@@ -3453,7 +3464,7 @@ function renderTeam(abr){
     <td style="white-space:nowrap">${p.mlbamid ? `<img src="https://img.mlbstatic.com/mlb-photos/image/upload/w_60,q_80/v1/people/${p.mlbamid}/headshot/67/current" width="24" height="24" style="border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />` : ''}${p.name}</td>
     <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${p.g}</td>
     <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${p.gs}</td>
-    <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${p.ip}</td>
+    <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${parseFloat(p.ip).toFixed(2)}</td>
     <td style="text-align:right;font-family:var(--mono);font-weight:600">${p.war.toFixed(2)}</td>
     <td style="text-align:right;font-family:var(--mono);${S.ipOverrides[pitcherKey(p)]!=null?'background:#fff3cd;font-weight:600;':''}">${ipStart.toFixed(2)}</td>
     <td style="text-align:right;font-family:var(--mono)">${warIP.toFixed(4)}</td>
@@ -3478,7 +3489,7 @@ function renderTeam(abr){
     <td style="white-space:nowrap">${p.mlbamid ? `<img src="https://img.mlbstatic.com/mlb-photos/image/upload/w_60,q_80/v1/people/${p.mlbamid}/headshot/67/current" width="24" height="24" style="border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />` : ''}${p.name}</td>
     <td style="text-align:right;font-family:var(--mono)">${p.g}</td>
     <td style="text-align:right;font-family:var(--mono)">${p.gs}</td>
-    <td style="text-align:right;font-family:var(--mono)">${p.ip}</td>
+    <td style="text-align:right;font-family:var(--mono)">${parseFloat(p.ip).toFixed(2)}</td>
     <td style="text-align:right;font-family:var(--mono);font-weight:600">${p.war.toFixed(2)}</td>
     <td style="text-align:right;font-family:var(--mono)">${p.war162.toFixed(2)}</td>
   </tr>`).join('');
@@ -4279,8 +4290,8 @@ function signInWithGoogle(){
 function signOut(){
   if(_currentUser){
     setPresenceOffline(_currentUser.uid);
-    logActivity(`signed out`);
-    setTimeout(() => auth.signOut(), 500); // let activity log before signing out
+    logActivity(`signed out`, '', 'login');
+    setTimeout(() => auth.signOut(), 500);
   } else {
     auth.signOut();
   }
@@ -4308,7 +4319,7 @@ auth.onAuthStateChanged(user => {
     setupPresence(user);
     loadFromFirebase();
     // Log login after short delay so listeners are ready
-    setTimeout(() => logActivity(`signed in`), 2000);
+    setTimeout(() => logActivity(`signed in`, '', 'login'), 2000);
   } else {
     _currentUser = null;
     document.getElementById('login-screen').style.display = 'flex';
@@ -4518,8 +4529,15 @@ function showActivityToast(name, action, team){
   }, 4000);
 }
 
-function logActivity(action, team){
+function logActivity(action, team, category){
   if(!_currentUser) return;
+  // Auto-detect category if not specified
+  if(!category){
+    const a = action.toLowerCase();
+    if(a.includes('signed in') || a.includes('signed out') || a.includes('logged in')) category = 'login';
+    else if(a.includes('logged pick') || a.includes('deleted pick') || a.includes('marked pick') || a.includes('edited pick')) category = 'bets';
+    else category = 'lineup';
+  }
   const name = _currentUser.displayName || _currentUser.email;
   const entry = {
     uid:    _currentUser.uid,
@@ -4527,35 +4545,49 @@ function logActivity(action, team){
     photo:  _currentUser.photoURL || '',
     action,
     team:   team || '',
+    category,
     ts:     firebase.firestore.FieldValue.serverTimestamp(),
     tsMs:   Date.now()
   };
-  // Show locally immediately — listener only shows for OTHER users
   showActivityToast(name, action, team);
   db.collection('activity').add(entry).catch(e => console.error('Activity log error:', e));
 }
 
 function renderActivityLog(docs){
-  const body = document.getElementById('activity-body');
-  const count = document.getElementById('activity-count');
-  if(!body) return;
-  if(!docs.length){
-    body.innerHTML = '<tr><td colspan="3" class="nd">No activity yet.</td></tr>';
-    if(count) count.textContent = '';
-    return;
+  function getCategory(d){
+    if(d.category) return d.category;
+    const a = (d.action||'').toLowerCase();
+    if(a.includes('signed in')||a.includes('signed out')||a.includes('logged in')) return 'login';
+    if(a.includes('logged pick')||a.includes('deleted pick')||a.includes('marked pick')||a.includes('edited pick')) return 'bets';
+    return 'lineup';
   }
-  if(count) count.textContent = docs.length + ' events';
-  body.innerHTML = docs.map(d => {
-    const ts = d.ts?.toDate ? d.ts.toDate().toLocaleString('en-US',{month:'2-digit',day:'2-digit',hour:'numeric',minute:'2-digit'}) : '—';
-    return `<tr>
-      <td style="color:var(--muted);font-size:10px;white-space:nowrap">${ts}</td>
-      <td style="white-space:nowrap">
-        <img src="${d.photo||''}" width="16" height="16" style="border-radius:50%;vertical-align:middle;margin-right:4px;" onerror="this.style.display='none'" />
-        ${(d.name||'?').split(' ')[0]}
-      </td>
-      <td>${d.team ? `<img src="${teamLogo(d.team)}" width="14" height="14" style="object-fit:contain;vertical-align:middle;margin-right:4px;${d.deleted?'filter:grayscale(1);opacity:0.4':''}" onerror="this.style.display='none'" />` : ''}${d.action||''}</td>
-    </tr>`;
-  }).join('');
+  function buildRows(filtered){
+    if(!filtered.length) return '<tr><td colspan="3" class="nd">None yet.</td></tr>';
+    return filtered.map(d => {
+      const ts = d.ts?.toDate ? d.ts.toDate().toLocaleString('en-US',{month:'2-digit',day:'2-digit',hour:'numeric',minute:'2-digit'}) : '—';
+      const logoHtml = d.team ? `<img src="${teamLogo(d.team)}" width="14" height="14" style="object-fit:contain;vertical-align:middle;margin-right:4px;" onerror="this.style.display='none'" />` : '';
+      return `<tr>
+        <td style="color:var(--muted);font-size:10px;white-space:nowrap">${ts}</td>
+        <td style="white-space:nowrap"><img src="${d.photo||''}" width="16" height="16" style="border-radius:50%;vertical-align:middle;margin-right:4px;" onerror="this.style.display='none'" />${(d.name||'?').split(' ')[0]}</td>
+        <td>${logoHtml}${d.action||''}</td>
+      </tr>`;
+    }).join('');
+  }
+  const logins  = docs.filter(d => getCategory(d) === 'login');
+  const lineups = docs.filter(d => getCategory(d) === 'lineup');
+  const bets    = docs.filter(d => getCategory(d) === 'bets');
+  const lb  = document.getElementById('activity-body-login');
+  const lnb = document.getElementById('activity-body-lineup');
+  const bb  = document.getElementById('activity-body-bets');
+  if(lb)  lb.innerHTML  = buildRows(logins);
+  if(lnb) lnb.innerHTML = buildRows(lineups);
+  if(bb)  bb.innerHTML  = buildRows(bets);
+  const lc  = document.getElementById('activity-count-login');
+  const lnc = document.getElementById('activity-count-lineup');
+  const bc  = document.getElementById('activity-count-bets');
+  if(lc)  lc.textContent  = logins.length  + ' events';
+  if(lnc) lnc.textContent = lineups.length + ' events';
+  if(bc)  bc.textContent  = bets.length    + ' events';
 }
 
 let _activityUnsub = null;
