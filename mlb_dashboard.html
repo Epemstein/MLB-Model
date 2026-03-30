@@ -808,7 +808,7 @@ input[type=number] { -moz-appearance:textfield; }
               <th style="padding:4px 6px">Game</th>
               <th style="padding:4px 6px">Team</th>
               <th style="text-align:right;padding:4px 4px">My</th>
-              <th style="text-align:right;padding:4px 4px">LowVig</th>
+              <th style="text-align:right;padding:4px 4px">NoVig</th>
               <th style="text-align:right;padding:4px 4px">Mdl</th>
               <th style="text-align:right;padding:4px 4px">Edge</th>
             </tr></thead>
@@ -1488,8 +1488,8 @@ async function fetchMLBGames(){
 
     // Step 3 — LowVig.ag odds via The Odds API (replaces ESPN)
     try {
-      await fetchLowVigOdds(games, date);
-    } catch(e){ console.warn('LowVig odds failed:', e.message); }
+      await fetchNoVigOdds(games, date);
+    } catch(e){ console.warn('NoVig odds failed:', e.message); }
 
     S.games = games;
     S.lastFetch = date;
@@ -1612,10 +1612,10 @@ function getBestSP(team){
 // ─────────────────────────────────────────────────────────────
 // ESPN Scoreboard Odds — free, no key, no rate limit
 // ─────────────────────────────────────────────────────────────
-async function fetchLowVigOdds(games, date){
+async function fetchNoVigOdds(games, date){
   // Fetch LowVig.ag moneyline odds via The Odds API proxy
   // API key is injected server-side — never exposed in frontend
-  const url = `${PROXY_BASE}/odds-api/sports/baseball_mlb/odds/?regions=us&markets=h2h&oddsFormat=american&bookmakers=lowvig`;
+  const url = `${PROXY_BASE}/odds-api/sports/baseball_mlb/odds/?regions=us&markets=h2h&oddsFormat=american&bookmakers=novig&regions=us_ex`;
   const res = await fetch(url);
   if(!res.ok) throw new Error(`Odds API ${res.status}`);
   const data = await res.json();
@@ -1630,7 +1630,7 @@ async function fetchLowVigOdds(games, date){
     const game = games.find(g => g.away === awayAbr && g.home === homeAbr);
     if(!game) continue;
 
-    const bk = event.bookmakers.find(b => b.key === 'lowvig');
+    const bk = event.bookmakers.find(b => b.key === 'novig');
     if(!bk) continue;
     const mkt = bk.markets.find(m => m.key === 'h2h');
     if(!mkt) continue;
@@ -1643,7 +1643,7 @@ async function fetchLowVigOdds(games, date){
       matched++;
     }
   }
-  console.log(`LowVig odds: matched ${matched}/${games.length} games`);
+  console.log(`NoVig odds: matched ${matched}/${games.length} games`);
 }
 
 function espnAbrToOurs(espn){
@@ -2129,7 +2129,7 @@ function rGames(){
             <div class="wp-side">
               <div class="wp-team">${g.away}</div>
               <div class="wp-num ${n(r.awWP)>=0.5?'fav':'dog'}">${awPct}%</div>
-              <div class="wp-detail">Model ${fmtO(r.awMO)} · LowVig ${fmtO(g.awayOdds)}</div>
+              <div class="wp-detail">Model ${fmtO(r.awMO)} · NoVig ${fmtO(g.awayOdds)}</div>
               <div class="wp-edge" style="color:${n(r.awEdge)>=0.03?'var(--green)':n(r.awEdge)<0?'var(--red)':'var(--muted)'}">
                 ${n(r.awEdge)>=0?'+':''}${(n(r.awEdge)*100).toFixed(2)}% edge
               </div>
@@ -2137,7 +2137,7 @@ function rGames(){
             <div class="wp-side">
               <div class="wp-team">${g.home}</div>
               <div class="wp-num ${n(r.hwWP)>=0.5?'fav':'dog'}">${hwPct}%</div>
-              <div class="wp-detail">Model ${fmtO(r.hwMO)} · LowVig ${fmtO(g.homeOdds)}</div>
+              <div class="wp-detail">Model ${fmtO(r.hwMO)} · NoVig ${fmtO(g.homeOdds)}</div>
               <div class="wp-edge" style="color:${n(r.hwEdge)>=0.03?'var(--green)':n(r.hwEdge)<0?'var(--red)':'var(--muted)'}">
                 ${n(r.hwEdge)>=0?'+':''}${(n(r.hwEdge)*100).toFixed(2)}% edge
               </div>
