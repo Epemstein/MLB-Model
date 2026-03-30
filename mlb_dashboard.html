@@ -790,9 +790,12 @@ input[type=number] { -moz-appearance:textfield; }
     <!-- LEFT: Odds Summary -->
     <div style="flex:0 0 420px;min-width:0;">
       <div class="card" style="padding:0;overflow:hidden;">
-        <div id="odds-table-hdr" onclick="toggleOddsTable()" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;user-select:none;border-bottom:1px solid var(--border);">
-          <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">Odds Summary</span>
-          <span id="odds-toggle-icon" style="font-size:11px;color:var(--muted);">▾</span>
+        <div id="odds-table-hdr" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border);">
+          <span onclick="toggleOddsTable()" style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);cursor:pointer;user-select:none;">Odds Summary</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button id="odds-refresh-btn" onclick="refreshOddsOnly()" style="padding:3px 9px;font-size:10px;background:transparent;border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--accent);font-weight:600;" title="Refresh NoVig odds without re-fetching games">⟳ Odds</button>
+            <span id="odds-toggle-icon" onclick="toggleOddsTable()" style="font-size:11px;color:var(--muted);cursor:pointer;user-select:none;">▾</span>
+          </div>
         </div>
         <div id="odds-table-body">
           <table class="dt" id="odds-summary-table" style="width:100%;font-family:Calibri,sans-serif;table-layout:fixed;font-size:11px;">
@@ -1613,12 +1616,21 @@ function getBestSP(team){
 // ESPN Scoreboard Odds — free, no key, no rate limit
 // ─────────────────────────────────────────────────────────────
 async function fetchNoVigOdds(games, date){
-  // Fetch LowVig.ag moneyline odds via The Odds API proxy
+  // Fetch NoVig.ag moneyline odds via The Odds API proxy
   // API key is injected server-side — never exposed in frontend
-  const url = `${PROXY_BASE}/odds-api/sports/baseball_mlb/odds/?regions=us&markets=h2h&oddsFormat=american&bookmakers=novig&regions=us_ex`;
+  // us_ex = US exchanges region (where NoVig lives)
+  const url = `${PROXY_BASE}/odds-api/sports/baseball_mlb/odds/?regions=us_ex&markets=h2h&oddsFormat=american&bookmakers=novig`;
   const res = await fetch(url);
   if(!res.ok) throw new Error(`Odds API ${res.status}`);
   const data = await res.json();
+
+  // Log all bookmaker keys returned so we can verify the correct key
+  if(data.length){
+    const allKeys = [...new Set(data.flatMap(e => e.bookmakers.map(b => b.key)))];
+    console.log('Odds API bookmaker keys returned:', allKeys);
+  } else {
+    console.log('Odds API returned 0 events for us_ex region');
+  }
 
   let matched = 0;
   for(const event of data){
@@ -1630,8 +1642,10 @@ async function fetchNoVigOdds(games, date){
     const game = games.find(g => g.away === awayAbr && g.home === homeAbr);
     if(!game) continue;
 
-    const bk = event.bookmakers.find(b => b.key === 'novig');
+    // Try novig key, fall back to first available exchange book
+    const bk = event.bookmakers.find(b => b.key === 'novig') || event.bookmakers[0];
     if(!bk) continue;
+    console.log(`Using bookmaker: ${bk.key} for ${awayName} @ ${homeName}`);
     const mkt = bk.markets.find(m => m.key === 'h2h');
     if(!mkt) continue;
 
@@ -1644,6 +1658,25 @@ async function fetchNoVigOdds(games, date){
     }
   }
   console.log(`NoVig odds: matched ${matched}/${games.length} games`);
+}
+
+async function refreshOddsOnly(){
+  // Standalone odds refresh — doesn't re-fetch schedule or lineups
+  if(!S.games || !S.games.length){ toast('Fetch games first.','err'); return; }
+  const btn = document.getElementById('odds-refresh-btn');
+  if(btn){ btn.textContent = '⟳…'; btn.disabled = true; }
+  try {
+    const date = S.lastFetch || getActiveDate();
+    await fetchNoVigOdds(S.games, date);
+    save();
+    rGames();
+    toast('Odds refreshed ✓');
+  } catch(e){
+    console.error('Odds refresh failed:', e);
+    toast('Odds refresh failed: ' + e.message, 'err');
+  } finally {
+    if(btn){ btn.textContent = '⟳ Odds'; btn.disabled = false; }
+  }
 }
 
 function espnAbrToOurs(espn){
