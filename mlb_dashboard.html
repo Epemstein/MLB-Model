@@ -2386,7 +2386,7 @@ function addPick(){
   S.picks.push(newPick);
   savePickToFirebase(newPick);
   sendTelegramPick(newPick);
-  logActivity(`Pick logged: ${newPick.tx} ${newPick.od>0?'+':''}${newPick.od} vs ${newPick.opp} (${newPick.dt.slice(0,5)})`, newPick.tx);
+  logActivity(`Pick logged: ${newPick.tx} ${newPick.od>0?'+':''}${newPick.od} vs ${newPick.opp} (${fmtDt(newPick.dt)})`, newPick.tx);
   localStorage.setItem('mlb26v3',JSON.stringify(S));
   rPicks();rPerf();
   if(document.getElementById("panel-kelly-tracker").classList.contains("active")) renderKellyTracker();
@@ -2410,13 +2410,13 @@ function setPickView(view, btn){
   rPicks();
 }
 
-function delPick(id){const dp=S.picks.find(p=>p.id===id);if(dp)logActivity(`Pick deleted: ${dp.tx} ${dp.od>0?'+':''}${dp.od} vs ${dp.opp} (${dp.dt.slice(0,5)})`, dp.tx);S.picks=S.picks.filter(p=>p.id!==id);deletePickFromFirebase(id);localStorage.setItem('mlb26v3',JSON.stringify(S));rPicks();rPerf();}
+function delPick(id){const dp=S.picks.find(p=>p.id===id);if(dp)logActivity(`Pick deleted: ${dp.tx} ${dp.od>0?'+':''}${dp.od} vs ${dp.opp} (${fmtDt(dp.dt)})`, dp.tx);S.picks=S.picks.filter(p=>p.id!==id);deletePickFromFirebase(id);localStorage.setItem('mlb26v3',JSON.stringify(S));rPicks();rPerf();}
 function updPick(id,rs){
   const p=S.picks.find(p=>p.id===id);if(!p)return;
   const oldRs = p.rs;
   p.rs=rs;p.uw=calcWon(p.od,p.un,rs);p.kuw=calcWon(p.od,p.ku||0,rs);
   savePickToFirebase(p);
-  logActivity(`Pick result: ${p.tx} ${p.od>0?'+':''}${p.od} vs ${p.opp} → ${rs} (${p.dt.slice(0,5)})`, p.tx);
+  logActivity(`Pick result: ${p.tx} ${p.od>0?'+':''}${p.od} vs ${p.opp} → ${rs} (${fmtDt(p.dt)})`, p.tx);
   localStorage.setItem('mlb26v3',JSON.stringify(S));
   rPicks();rPerf();
   if(document.getElementById("panel-kelly-tracker").classList.contains("active")) renderKellyTracker();
@@ -3408,6 +3408,12 @@ function loadBRUI(){document.getElementById('br-s').value=S.br.start;document.ge
 // S._dailyBR = { 'YYYY-MM-DD': { start: 10000, confirmed: true } }
 if(!S._dailyBR) S._dailyBR = {};
 
+function fmtDt(dt){
+  // Returns MM/DD from either MM/DD/YYYY or YYYY-MM-DD
+  if(!dt) return '—';
+  if(dt.includes('-')) return dt.slice(5,7)+'/'+dt.slice(8,10); // YYYY-MM-DD → MM/DD
+  return dt.slice(0,5); // MM/DD/YYYY → MM/DD
+}
 function dateToYMD(mmddyyyy){
   // converts "03/27/2026" → "2026-03-27"
   if(!mmddyyyy) return '';
@@ -4608,7 +4614,7 @@ function saveEditPick(){
   p.uw  = calcWon(p.od, p.un, p.rs);
   p.kuw = calcWon(p.od, p.ku||0, p.rs);
   savePickToFirebase(p);
-  logActivity(`Pick edited: ${p.tx} ${p.od>0?'+':''}${p.od} vs ${p.opp} → ${p.rs} (${p.dt.slice(0,5)})`, p.tx);
+  logActivity(`Pick edited: ${p.tx} ${p.od>0?'+':''}${p.od} vs ${p.opp} → ${p.rs} (${fmtDt(p.dt)})`, p.tx);
   localStorage.setItem('mlb26v3',JSON.stringify(S));
   closeEditPick();
   rPicks();
