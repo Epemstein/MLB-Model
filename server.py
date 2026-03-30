@@ -9,10 +9,13 @@ import http.server, urllib.request, json, os
 PORT = int(os.environ.get('PORT', 8080))
 IS_CLOUD = os.environ.get('RENDER', '') != ''  # Render sets this env var
 
+ODDS_API_KEY = '16381a969b24dad9592530007f8b51f9'
+
 PROXY_RULES = {
     '/fg/':       'https://www.fangraphs.com/api/scores/',
     '/fg-proj/':  'https://www.fangraphs.com/api/projections',
     '/mlb-api/':  'https://statsapi.mlb.com/api/v1/',
+    '/odds-api/': 'https://api.the-odds-api.com/v4/',
 }
 
 FG_HEADERS = {
@@ -25,6 +28,11 @@ FG_HEADERS = {
 }
 
 MLB_HEADERS = {
+    'User-Agent': 'Mozilla/5.0',
+    'Accept':     'application/json',
+}
+
+ODDS_API_HEADERS = {
     'User-Agent': 'Mozilla/5.0',
     'Accept':     'application/json',
 }
@@ -54,7 +62,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     upstream = upstream_base + ('?' + tail.split('?',1)[1] if '?' in tail else '')
                 else:
                     upstream = upstream_base + tail
-                hdrs = FG_HEADERS if 'fangraphs' in upstream_base else MLB_HEADERS
+                if 'fangraphs' in upstream_base:
+                    hdrs = FG_HEADERS
+                elif 'the-odds-api' in upstream_base:
+                    hdrs = ODDS_API_HEADERS
+                    # Inject API key so dashboard never needs it
+                    sep = '&' if '?' in upstream else '?'
+                    upstream = upstream + sep + 'apiKey=' + ODDS_API_KEY
+                else:
+                    hdrs = MLB_HEADERS
                 self._proxy(upstream, hdrs)
                 return
 
