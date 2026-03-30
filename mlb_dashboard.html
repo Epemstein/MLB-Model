@@ -4696,7 +4696,7 @@ async function loadFromFirebase(){
     // Now set up real-time listeners (picks + activity)
     setupRealtimeListeners();
     subscribeToGamesDate(getActiveDate());
-    loadActivityLog();
+    // Activity log loaded on-demand when Activity tab is opened (saves Firestore reads)
 
     console.log('Firebase loaded, listeners active');
   } catch(e){
@@ -4817,27 +4817,18 @@ function renderActivityLog(docs){
   if(bc)  bc.textContent  = bets.length    + ' events';
 }
 
-let _activityUnsub = null;
 function loadActivityLog(){
-  if(_activityUnsub) return; // already listening
-  let _lastActivityTs = Date.now();
-  _activityUnsub = db.collection('activity')
+  // One-time fetch — called each time the Activity tab is opened
+  // No persistent listener — saves reads for all connected users
+  db.collection('activity')
     .orderBy('tsMs', 'desc')
     .limit(100)
-    .onSnapshot(snap => {
+    .get()
+    .then(snap => {
       const docs = snap.docs.map(d => d.data());
       renderActivityLog(docs);
-      // Show toast for new events from OTHER users
-      snap.docChanges().forEach(change => {
-        if(change.type === 'added'){
-          const d = change.doc.data();
-          if(d.uid !== _currentUser?.uid && d.tsMs > _lastActivityTs){
-            showActivityToast(d.name, d.action);
-          }
-        }
-      });
-      _lastActivityTs = Date.now();
-    }, e => console.error('Activity listener error:', e));
+    })
+    .catch(e => console.error('Activity fetch error:', e));
 }
 
 // ═══════════════════════════════════════════════
