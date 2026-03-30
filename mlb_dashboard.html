@@ -2140,13 +2140,13 @@ function rGames(){
       <div class="gc-teams">
         <div class="gc-team-hdr away" style="background:${awInfo.primary}" onclick="toggleDrawer('${gid}')">
           <img class="team-logo-bg" src="${awLogo}" alt="" width="62" height="62" onerror="this.style.display='none'" />
-          <span class="team-hdr-name">${g.away}</span>
+          <span class="team-hdr-name" style="padding-left:52px;padding-right:0;">${g.away}</span>
           <div class="win-pct-block"><div class="win-pct">${awPct}%</div><div class="win-implied">${fmtO(r.awMO)}</div></div>
         </div>
-        <div class="gc-team-hdr home" style="background:${hwInfo.primary}" onclick="toggleDrawer('${gid}')">
-          <img class="team-logo-bg" src="${hwLogo}" alt="" width="62" height="62" onerror="this.style.display='none'" />
-          <span class="team-hdr-name">${g.home}</span>
-          <div class="win-pct-block"><div class="win-pct">${hwPct}%</div><div class="win-implied">${fmtO(r.hwMO)}</div></div>
+        <div class="gc-team-hdr home" style="background:${hwInfo.primary};flex-direction:row-reverse;" onclick="toggleDrawer('${gid}')">
+          <img class="team-logo-bg" src="${hwLogo}" alt="" width="62" height="62" style="left:auto;right:6px;" onerror="this.style.display='none'" />
+          <span class="team-hdr-name" style="padding-left:0;padding-right:52px;text-align:right;">${g.home}</span>
+          <div class="win-pct-block" style="align-items:flex-start;"><div class="win-pct">${hwPct}%</div><div class="win-implied">${fmtO(r.hwMO)}</div></div>
         </div>
       </div>
 
