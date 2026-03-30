@@ -2325,7 +2325,7 @@ function autoCalcEdge(){
 }
 async function sendTelegramPick(pick){
   try {
-    const dtYMD    = pick.dt.slice(6,10)+'-'+pick.dt.slice(0,2)+'-'+pick.dt.slice(3,5);
+    const dtYMD    = dateToYMD(pick.dt);
     let br = S.br.start || 10000;
     try {
       const brResult = calcAutoStartBR(dtYMD);
