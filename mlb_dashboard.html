@@ -2442,7 +2442,26 @@ async function runOvernights(){
     if(!dates.length || !dates[0].games?.length) throw new Error(`No games found for ${tomorrow}`);
     const games = dates[0].games.map(parseMLBGame);
 
-    // Step 2 — fetch BetOnline odds for tomorrow
+    // Step 2 — fetch FanGraphs projected lineups for tomorrow
+    status.textContent = '⟳ Fetching FanGraphs lineups…';
+    try {
+      const fgPath = `live-all?gamedate=${tomorrow}`;
+      const isLocalServer = ['8080','8000','3000'].includes(window.location.port) || window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+      const fgUrl = (isLocalServer || RENDER_URL !== 'YOUR_RENDER_URL_HERE')
+        ? `${PROXY_BASE}/fg/${fgPath}`
+        : `https://www.fangraphs.com/api/scores/${fgPath}`;
+      const fgRes = await fetch(fgUrl);
+      const fgText = await fgRes.text();
+      if(fgText.trim().startsWith('[')){
+        const fgData = JSON.parse(fgText);
+        applyFanGraphsLineups(games, fgData);
+        console.log('Overnights: FanGraphs lineups applied');
+      } else {
+        console.warn('Overnights: FanGraphs lineups unavailable, falling back to projected top-9');
+      }
+    } catch(e){ console.warn('Overnights FanGraphs fetch failed:', e.message); }
+
+    // Step 3 — fetch BetOnline odds for tomorrow
     status.textContent = '⟳ Fetching BetOnline odds…';
     const oddsUrl = `${PROXY_BASE}/odds-api/sports/baseball_mlb/odds/?regions=us&markets=h2h&oddsFormat=american&bookmakers=betonlineag`;
     const oddsRes = await fetch(oddsUrl);
@@ -2471,7 +2490,7 @@ async function runOvernights(){
       if(ao && ho){ game.awayBO = ao.price; game.homeBO = ho.price; }
     }
 
-    // Step 3 — run model and find ≥3% edges vs BetOnline
+    // Step 4 — run model and find ≥3% edges vs BetOnline
     status.textContent = '⟳ Calculating edges…';
     const now = new Date().toLocaleString('en-US',{month:'2-digit',day:'2-digit',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true});
     const newPicks = [];
