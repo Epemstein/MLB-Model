@@ -3457,18 +3457,18 @@ function renderTeam(abr){
     return `<tr>
     <td style="color:var(--muted)">${i+1}</td>
     <td style="white-space:nowrap">${p.mlbamid ? `<img src="https://img.mlbstatic.com/mlb-photos/image/upload/w_60,q_80/v1/people/${p.mlbamid}/headshot/67/current" width="24" height="24" style="border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />` : ''}${p.name}</td>
-    <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${p.g}</td>
-    <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${p.gs}</td>
-    <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${parseFloat(p.ip).toFixed(2)}</td>
-    <td style="text-align:right;font-family:var(--mono);font-weight:600">${p.war.toFixed(2)}</td>
-    <td style="text-align:right;font-family:var(--mono);${S.ipOverrides[pitcherKey(p)]!=null?'background:#fff3cd;font-weight:600;':''}">${ipStart.toFixed(2)}</td>
-    <td style="text-align:right;font-family:var(--mono)">${warIP.toFixed(4)}</td>
-    <td style="text-align:right;font-family:var(--mono)">${p.war162.toFixed(2)}</td>
+    <td style="text-align:right;font-family:Calibri,sans-serif;color:var(--muted)">${parseFloat(p.g).toFixed(2)}</td>
+    <td style="text-align:right;font-family:Calibri,sans-serif;color:var(--muted)">${parseFloat(p.gs).toFixed(2)}</td>
+    <td style="text-align:right;font-family:Calibri,sans-serif;color:var(--muted)">${parseFloat(p.ip).toFixed(2)}</td>
+    <td style="text-align:right;font-family:Calibri,sans-serif;font-weight:600">${p.war.toFixed(2)}</td>
+    <td style="text-align:right;font-family:Calibri,sans-serif;${S.ipOverrides[pitcherKey(p)]!=null?'background:#fff3cd;font-weight:600;':''}">${ipStart.toFixed(2)}</td>
+    <td style="text-align:right;font-family:Calibri,sans-serif">${warIP.toFixed(4)}</td>
+    <td style="text-align:right;font-family:Calibri,sans-serif">${p.war162.toFixed(2)}</td>
   </tr>`;
   }).join('');
 
   document.getElementById('tm-rotation').innerHTML = `
-    <table class="dt">
+    <table class="dt" style="font-family:Calibri,sans-serif;">
       <thead><tr><th>#</th><th>Starter</th><th style="text-align:right">G</th><th style="text-align:right">GS</th><th style="text-align:right">IP</th><th style="text-align:right">WAR</th><th style="text-align:right">IP/Start</th><th style="text-align:right">WAR/IP</th><th style="text-align:right">WAR/162</th></tr></thead>
       <tbody>${rotRows || '<tr><td colspan="9" class="nd">No data</td></tr>'}</tbody>
     </table>`;
@@ -3482,15 +3482,15 @@ function renderTeam(abr){
   const bpRows = bullpen.map((p,i) => `<tr>
     <td style="color:var(--muted)">${i+1}</td>
     <td style="white-space:nowrap">${p.mlbamid ? `<img src="https://img.mlbstatic.com/mlb-photos/image/upload/w_60,q_80/v1/people/${p.mlbamid}/headshot/67/current" width="24" height="24" style="border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />` : ''}${p.name}</td>
-    <td style="text-align:right;font-family:var(--mono)">${p.g}</td>
-    <td style="text-align:right;font-family:var(--mono)">${p.gs}</td>
-    <td style="text-align:right;font-family:var(--mono)">${parseFloat(p.ip).toFixed(2)}</td>
-    <td style="text-align:right;font-family:var(--mono);font-weight:600">${p.war.toFixed(2)}</td>
-    <td style="text-align:right;font-family:var(--mono)">${p.war162.toFixed(2)}</td>
+    <td style="text-align:right;font-family:Calibri,sans-serif">${parseFloat(p.g).toFixed(2)}</td>
+    <td style="text-align:right;font-family:Calibri,sans-serif">${parseFloat(p.gs).toFixed(2)}</td>
+    <td style="text-align:right;font-family:Calibri,sans-serif">${parseFloat(p.ip).toFixed(2)}</td>
+    <td style="text-align:right;font-family:Calibri,sans-serif;font-weight:600">${p.war.toFixed(2)}</td>
+    <td style="text-align:right;font-family:Calibri,sans-serif">${p.war162.toFixed(2)}</td>
   </tr>`).join('');
 
   document.getElementById('tm-bullpen').innerHTML = `
-    <table class="dt">
+    <table class="dt" style="font-family:Calibri,sans-serif;">
       <thead><tr><th>#</th><th>Pitcher</th><th style="text-align:right">G</th><th style="text-align:right">GS</th><th style="text-align:right">IP</th><th style="text-align:right">WAR</th><th style="text-align:right">WAR/162</th></tr></thead>
       <tbody>${bpRows || '<tr><td colspan="7" class="nd">No data</td></tr>'}</tbody>
     </table>`;
@@ -3506,18 +3506,18 @@ function renderTeam(abr){
     return `<tr>
       <td style="color:var(--muted)">${i+1}</td>
       <td style="white-space:nowrap">${p.mlbamid ? `<img src="https://img.mlbstatic.com/mlb-photos/image/upload/w_60,q_80/v1/people/${p.mlbamid}/headshot/67/current" width="24" height="24" style="border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />` : ''}${p.name}</td>
-      <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${p.g}</td>
-      <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${Math.round(p.pa)}</td>
-      <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${paShare}</td>
-      <td style="text-align:right;font-family:var(--mono);font-weight:600">${p.war.toFixed(2)}</td>
-      <td style="text-align:right;font-family:var(--mono)">${paG.toFixed(2)}</td>
-      <td style="text-align:right;font-family:var(--mono)">${warPA.toFixed(4)}</td>
-      <td style="text-align:right;font-family:var(--mono)">${war162.toFixed(2)}</td>
+      <td style="text-align:right;font-family:Calibri,sans-serif;color:var(--muted)">${parseFloat(p.g).toFixed(2)}</td>
+      <td style="text-align:right;font-family:Calibri,sans-serif;color:var(--muted)">${parseFloat(p.pa).toFixed(2)}</td>
+      <td style="text-align:right;font-family:Calibri,sans-serif;color:var(--muted)">${paShare}</td>
+      <td style="text-align:right;font-family:Calibri,sans-serif;font-weight:600">${p.war.toFixed(2)}</td>
+      <td style="text-align:right;font-family:Calibri,sans-serif">${paG.toFixed(2)}</td>
+      <td style="text-align:right;font-family:Calibri,sans-serif">${warPA.toFixed(4)}</td>
+      <td style="text-align:right;font-family:Calibri,sans-serif">${war162.toFixed(2)}</td>
     </tr>`;
   }).join('');
 
   document.getElementById('tm-hitters').innerHTML = `
-    <table class="dt">
+    <table class="dt" style="font-family:Calibri,sans-serif;">
       <thead><tr><th>#</th><th>Player</th><th style="text-align:right">G</th><th style="text-align:right">PA</th><th style="text-align:right">PA%</th><th style="text-align:right">WAR</th><th style="text-align:right">PA/G</th><th style="text-align:right">WAR/PA</th><th style="text-align:right">WAR/162</th></tr></thead>
       <tbody>${hRows || '<tr><td colspan="9" class="nd">No data</td></tr>'}</tbody>
     </table>`;
