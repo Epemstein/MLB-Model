@@ -1338,6 +1338,8 @@ const WIN_TOTALS=[{Team:'LAD',Market:103.5,Model:105.4},{Team:'NYY',Market:90.5,
 // CONFIG — update RENDER_URL after deploying to Render.com
 // ═══════════════════════════════════════════════
 const RENDER_URL = 'https://mlb-model-xwti.onrender.com';
+const TG_TOKEN = '8699040384:AAHGUYll31NgDPKFthDMB0_YTiKOVSOdF1A';
+const TG_CHAT  = '-5110059891';
 const isLocal = ['localhost','127.0.0.1'].includes(window.location.hostname);
 const PROXY_BASE = isLocal ? `${window.location.protocol}//${window.location.hostname}:8080` : RENDER_URL;
 
@@ -2321,6 +2323,42 @@ function autoCalcEdge(){
   }
   updateKellyRec();
 }
+async function sendTelegramPick(pick){
+  try {
+    const dtYMD    = pick.dt.slice(6,10)+'-'+pick.dt.slice(0,2)+'-'+pick.dt.slice(3,5);
+    const br       = calcAutoStartBR(dtYMD) || S.br.start;
+    const kellyPct = pick.ku ? Math.min(pick.ku * (S.br.kelly||0.5), S.br.maxPct||3) : 0;
+    const riskAmt  = (kellyPct / 100 * br).toFixed(0);
+    const winAmt   = pick.od >= 0
+      ? (riskAmt * pick.od / 100).toFixed(0)
+      : (riskAmt * 100 / Math.abs(pick.od)).toFixed(0);
+    const oddsStr  = pick.od >= 0 ? `+${pick.od}` : String(pick.od);
+    const edgeStr  = pick.ed >= 0 ? `+${pick.ed.toFixed(1)}%` : `${pick.ed.toFixed(1)}%`;
+    const haStr    = pick.ha === '@' ? `@ ${pick.opp}` : `vs ${pick.opp}`;
+    const user     = _currentUser?.displayName?.split(' ')[0] || 'Someone';
+
+    const text =
+`*${pick.tx} ${oddsStr}* ${haStr}
+Game: ${pick.gt || pick.dt}
+Daily Balance: $${Number(br).toLocaleString()}
+Edge: ${edgeStr} | xWP: ${pick.xwp ? pick.xwp.toFixed(1)+'%' : '—'}
+Kelly: ${kellyPct.toFixed(2)}% | Risk $${riskAmt} | Win $${winAmt}
+Logged by ${user}`;
+
+    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        chat_id:    TG_CHAT,
+        text,
+        parse_mode: 'Markdown'
+      })
+    });
+  } catch(e){
+    console.warn('Telegram notification failed:', e.message);
+  }
+}
+
 function addPick(){
   const dt  = document.getElementById('p-dt').value;
   const gt  = document.getElementById('p-gt').value.trim();
@@ -2342,6 +2380,7 @@ function addPick(){
   const newPick={id:Date.now(),dt,gt,tx,opp,ha,od,ed:edFinal,xwp,un,ku,rs,uw,kuw,tp};
   S.picks.push(newPick);
   savePickToFirebase(newPick);
+  sendTelegramPick(newPick);
   logActivity(`Pick logged: ${newPick.tx} ${newPick.od>0?'+':''}${newPick.od} vs ${newPick.opp} (${newPick.dt.slice(0,5)})`, newPick.tx);
   localStorage.setItem('mlb26v3',JSON.stringify(S));
   rPicks();rPerf();
