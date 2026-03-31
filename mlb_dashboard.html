@@ -4643,7 +4643,9 @@ function epAutoCalc(){
 }
 
 function saveEditPick(){
-  const p = S.picks.find(p => p.id === _editPickId);
+  const p = _editPickIsOvernight
+    ? S.overnights.find(p => p.id === _editPickId)
+    : S.picks.find(p => p.id === _editPickId);
   if(!p) return;
   p.tp  = document.getElementById('ep-tp').value.trim() || p.tp;
   p.dt  = document.getElementById('ep-dt').value;
