@@ -254,10 +254,34 @@ def fetch_projections():
         print(f'Snapshot cache miss: {e}')
 
     print('Fetching fresh Steamer projections from FanGraphs via Render...')
-    bat_r = requests.get(bat_url, timeout=45)
-    pit_r = requests.get(pit_url, timeout=45)
-    if not bat_r.ok or not pit_r.ok:
-        raise Exception(f'Projection fetch failed: {bat_r.status_code}/{pit_r.status_code}')
+    last_err = None
+    for attempt in range(2):
+        try:
+            bat_r = requests.get(bat_url, timeout=90)
+            pit_r = requests.get(pit_url, timeout=90)
+            if bat_r.ok and pit_r.ok:
+                break
+        except Exception as e:
+            last_err = e
+            if attempt == 0:
+                print(f'Render attempt 1 failed ({e}), retrying in 30s...')
+                time.sleep(30)
+    else:
+        # Both attempts failed — try yesterday's snapshot
+        print(f'Render failed after 2 attempts. Trying yesterday snapshot...')
+        try:
+            yesterday = (datetime.datetime.now(ET) - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
+            snap = db.collection('proj_snapshots').document(yesterday).get()
+            if snap.exists:
+                data = snap.to_dict()
+                if data.get('bat') and data.get('pit'):
+                    print(f'Using yesterday snapshot ({yesterday})')
+                    bat = [{'name':r[0],'team':r[1],'g':r[2],'pa':r[3],'war':r[4]} for r in data['bat']]
+                    pit = [{'name':r[0],'team':r[1],'g':r[2],'gs':r[3],'ip':r[4],'war':r[5]} for r in data['pit']]
+                    return bat, pit
+        except Exception as e2:
+            print(f'Yesterday snapshot also failed: {e2}')
+        raise Exception(f'Projections unavailable: {last_err}')
 
     bat_raw = bat_r.json()
     pit_raw = pit_r.json()
