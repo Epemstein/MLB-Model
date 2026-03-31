@@ -75,6 +75,13 @@ def calc_kelly(odds, edge_pct):
     kelly = (b*p - q) / b
     return max(0, kelly) * 100
 
+
+def war162(p):
+    g = p.get("g", 0) or 0
+    pa = p.get("pa", 0) or 0
+    war = p.get("war", 0) or 0
+    return (pa / g) * (war / pa) * 162 if g > 0 and pa > 0 else 0.0
+
 def norm_name(name):
     """Normalize player name for matching — port of JS normName()"""
     if not name: return ''
@@ -166,62 +173,69 @@ def find_pitcher(team, sp_name, proj_pitchers):
     return None
 
 def model_calc(aw, hw, aw_sp_name, hw_sp_name, proj_hitters, proj_pitchers,
-               proj_wins, aw_lineup=None, hw_lineup=None):
+               proj_wins, aw_lineup=None, hw_lineup=None, debug=False):
     """
     Full port of JS modelCalc().
     aw_lineup / hw_lineup: list of dicts {name, war, pa, g} for confirmed batters
     Returns (aw_wp, hw_wp)
     """
+    def war162(p):
+        g = p.get('g', 0) or 0
+        pa = p.get('pa', 0) or 0
+        war = p.get('war', 0) or 0
+        if g > 0 and pa > 0:
+            return (pa / g) * (war / pa) * 162
+        return 0.0
+
     def stage_calc(team, sp_name, p_wins, lineup_players, is_home):
         # 1. SP WAR/162
         sp = find_pitcher(team, sp_name, proj_pitchers)
         sp_war162 = get_pitcher_war162(sp) if sp else 0.0
 
-        # 2. Rotation baseline
+        # 2. Rotation baseline — top 5 starters by GS
         rotation = get_team_rotation_baseline(team, proj_pitchers)
 
         # 3. Pitcher value + change
         pitcher_value = sp_war162 * 5
         pitcher_change = pitcher_value - rotation
 
-        # 4. Projected starters (confirmed lineup or top-9 by war)
+        # 4. Projected starters × 1.08
         if lineup_players and len(lineup_players) >= 7:
-            # Use confirmed/projected lineup
-            proj_starters = sum(
-                (p.get('g',0) > 0 and
-                 (p.get('pa',0)/p.get('g',1)) * (p.get('war',0)/p.get('pa',1) if p.get('pa',0) > 0 else 0) * 162
-                 or 0)
-                for p in lineup_players[:9]
-            ) * 1.08
+            proj_starters = sum(war162(p) for p in lineup_players[:9]) * 1.08
+            lineup_source = 'confirmed'
         else:
-            # Top-9 by war from projections
-            team_h = [p for p in proj_hitters if p.get('team') == team and (p.get('war',0) or 0) > 0]
-            team_h.sort(key=lambda p: -(p.get('war',0) or 0))
-            top9 = team_h[:9]
-            proj_starters = sum(
-                (p.get('g',0) > 0 and
-                 (p.get('pa',0)/p.get('g',1)) * (p.get('war',0)/p.get('pa',1) if p.get('pa',0) > 0 else 0) * 162
-                 or 0)
-                for p in top9
-            ) * 1.08
+            team_h = sorted(
+                [p for p in proj_hitters if p.get('team') == team and (p.get('war', 0) or 0) > 0],
+                key=lambda p: -(p.get('war', 0) or 0)
+            )[:9]
+            proj_starters = sum(war162(p) for p in team_h) * 1.08
+            lineup_source = 'top9'
 
-        # 5. Total hitter WAR (team baseline, weighted avg × 9)
+        # 5. Total hitter WAR baseline — weighted avg WAR/162 × 9
         live_hitters = [p for p in proj_hitters if p.get('team') == team]
-        total_pa = sum(p.get('pa',0) or 0 for p in live_hitters)
+        total_pa = sum(p.get('pa', 0) or 0 for p in live_hitters)
         if total_pa > 0:
             total_hitter_war = sum(
-                ((p.get('g',0) > 0 and
-                  (p.get('pa',0)/p.get('g',1)) * (p.get('war',0)/p.get('pa',1) if p.get('pa',0) > 0 else 0) * 162
-                  or 0) * ((p.get('pa',0) or 0) / total_pa))
+                war162(p) * ((p.get('pa', 0) or 0) / total_pa)
                 for p in live_hitters
             ) * 9
         else:
-            total_hitter_war = 0
+            total_hitter_war = 0.0
 
         hitter_change = proj_starters - total_hitter_war
         total_change  = pitcher_change + hitter_change
         wins    = p_wins + total_change
         win_pct = (wins / 162) * (1.07 if is_home else 1.0)
+
+        if debug:
+            print(f'  [{team} {"HOME" if is_home else "AWAY"}]')
+            print(f'    sp={sp_name!r} found={sp is not None} sp_war162={sp_war162:.4f}')
+            print(f'    rotation={rotation:.4f}  pitcher_value={pitcher_value:.4f}  pitcher_change={pitcher_change:.4f}')
+            print(f'    proj_starters={proj_starters:.4f} ({lineup_source})')
+            print(f'    total_hitter_war={total_hitter_war:.4f}  hitter_change={hitter_change:.4f}')
+            print(f'    total_change={total_change:.4f}  proj_wins={p_wins:.4f}  wins={wins:.4f}')
+            print(f'    win_pct={win_pct:.6f}')
+
         return win_pct
 
     aw_win_pct = stage_calc(aw, aw_sp_name, proj_wins.get(aw, 81), aw_lineup, False)
@@ -231,6 +245,11 @@ def model_calc(aw, hw, aw_sp_name, hw_sp_name, proj_hitters, proj_pitchers,
     hw_gs = hw_win_pct * (1 - aw_win_pct)
     tot   = aw_gs + hw_gs
     if tot == 0: return 0.5, 0.5
+
+    if debug:
+        print(f'  aw_gs={aw_gs:.6f}  hw_gs={hw_gs:.6f}')
+        print(f'  FINAL aw_wp={aw_gs/tot*100:.4f}%  hw_wp={hw_gs/tot*100:.4f}%')
+
     return aw_gs/tot, hw_gs/tot
 
 # ── Fetch Steamer projections via Render proxy ────────────────────────────
@@ -456,7 +475,11 @@ def run():
                                key=lambda x: x.get('BatOrder',99))
 
                 if len(aw_pl) >= 7 and len(hw_pl) >= 7:
-                    gm['has_lineup'] = True
+                    # Only mark confirmed if at least some players are NOT projected
+                    # mirrors JS: awPlayers.some(p => p.IsProjected === false)
+                    aw_confirmed = any(p.get('IsProjected') == False for p in aw_pl)
+                    hw_confirmed = any(p.get('IsProjected') == False for p in hw_pl)
+                    gm['has_lineup'] = aw_confirmed and hw_confirmed
                     # Map FG players to projection data for WAR
                     def map_players(players, team):
                         result = []
@@ -518,11 +541,17 @@ def run():
 
     for gm in games:
         aw, hw = gm['away'], gm['home']
+        print(f'\n=== {aw}@{hw} lineup={gm["has_lineup"]} aw_sp={gm["aw_sp"]!r} hw_sp={gm["hw_sp"]!r} ===')
+        if gm['has_lineup'] and gm['aw_lineup']:
+            print(f'  AW lineup: {[(p.get("name","?"), round(war162(p),3)) for p in gm["aw_lineup"][:9]]}')
+        if gm['has_lineup'] and gm['hw_lineup']:
+            print(f'  HW lineup: {[(p.get("name","?"), round(war162(p),3)) for p in gm["hw_lineup"][:9]]}')
         aw_wp, hw_wp = model_calc(
             aw, hw, gm['aw_sp'], gm['hw_sp'],
             proj_hitters, proj_pitchers, proj_wins,
             gm['aw_lineup'] if gm['has_lineup'] else None,
             gm['hw_lineup'] if gm['has_lineup'] else None,
+            debug=True,
         )
         gm['aw_wp'] = round(aw_wp*100, 2)
         gm['hw_wp'] = round(hw_wp*100, 2)
