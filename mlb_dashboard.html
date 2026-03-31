@@ -873,10 +873,14 @@ input[type=number] { -moz-appearance:textfield; }
   <div class="card" style="margin-bottom:14px;">
     <div class="ct">Overnights — Auto-Log</div>
     <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <label style="font-size:11px;color:var(--muted);white-space:nowrap;">Date:</label>
+        <input type="date" id="overnight-date" oninput="updateOvernightBtn()" style="font-size:11px;padding:4px 6px;border:1px solid var(--border2);border-radius:4px;" />
+      </div>
       <button id="overnight-btn" onclick="runOvernights()" class="btn" style="padding:8px 18px;font-size:13px;font-weight:600;background:linear-gradient(to right,#e8f3ff,#c5dff8);color:#1a3a5c;border:1px solid #a8c8ee;border-radius:5px;box-shadow:3px 3px 8px rgba(0,0,0,.15);cursor:pointer;">
-        ⚡ Log Tomorrow's Overnights
+        ⚡ Overnights for —
       </button>
-      <div style="font-size:11px;color:var(--muted);">Fetches tomorrow's schedule + BetOnline odds, logs all games with ≥3% edge at 1u each.</div>
+      <div style="font-size:11px;color:var(--muted);">Fetches schedule + BetOnline odds for selected date, logs all games with ≥3% edge at 1u each.</div>
       <span id="overnight-status" style="font-size:11px;font-family:var(--mono);color:var(--muted);"></span>
     </div>
   </div>
@@ -2464,7 +2468,34 @@ function rPicks(){
 // OVERNIGHTS
 // ═══════════════════════════════════════════════
 
+function updateOvernightBtn(){
+  const input = document.getElementById('overnight-date');
+  const btn = document.getElementById('overnight-btn');
+  if(!input || !btn) return;
+  if(input.value){
+    // Format as MM/DD for display
+    const [y,m,d] = input.value.split('-');
+    btn.textContent = `⚡ Overnights for ${m}/${d}`;
+  } else {
+    btn.textContent = '⚡ Overnights for —';
+  }
+}
+
+function initOvernightDate(){
+  const input = document.getElementById('overnight-date');
+  if(!input) return;
+  // Default to tomorrow
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  input.value = d.toISOString().slice(0,10);
+  updateOvernightBtn();
+}
+
 async function runOvernights(){
+  const dateInput = document.getElementById('overnight-date');
+  const tomorrow = dateInput?.value || (() => {
+    const d = new Date(); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10);
+  })();
   const btn = document.getElementById('overnight-btn');
   const status = document.getElementById('overnight-status');
   btn.disabled = true;
@@ -2472,11 +2503,8 @@ async function runOvernights(){
   status.textContent = '';
 
   try {
-    // Tomorrow's date
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    const tomorrow = d.toISOString().slice(0,10); // YYYY-MM-DD
-    const tomorrowMDY = `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${d.getFullYear()}`;
+    const d = new Date(tomorrow + 'T12:00:00Z');
+    const tomorrowMDY = `${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')}/${d.getUTCFullYear()}`;
 
     // Step 1 — fetch tomorrow's schedule
     status.textContent = '⟳ Fetching schedule…';
@@ -2645,7 +2673,7 @@ async function runOvernights(){
     toast('Overnights failed: ' + e.message, 'err');
   } finally {
     btn.disabled = false;
-    btn.textContent = '⚡ Log Tomorrow\'s Overnights';
+    updateOvernightBtn();
   }
 }
 
@@ -3626,7 +3654,7 @@ function showPanel(name,btn){
   if(btn)btn.classList.add('active');
   if(name==='games')rGames();
   if(name==='kelly-tracker'){renderKellyTracker();}
-  if(name==='overnights'){rOvernights();}
+  if(name==='overnights'){initOvernightDate();rOvernights();}
   if(name==='perf')rCharts();
   if(name==='teams'){initTeamBtns();renderTeam(currentTeam);}
   if(name==='proj-h')rProjH();
