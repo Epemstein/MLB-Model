@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>xMLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -802,13 +802,14 @@ input[type=number] { -moz-appearance:textfield; }
         <div id="odds-table-body">
           <table class="dt" id="odds-summary-table" style="width:100%;font-family:Calibri,sans-serif;table-layout:fixed;font-size:11px;">
             <colgroup>
-              <col style="width:20%">
-              <col style="width:14%">
+              <col style="width:18%">
               <col style="width:12%">
-              <col style="width:12%">
-              <col style="width:12%">
-              <col style="width:15%">
-              <col style="width:15%">
+              <col style="width:11%">
+              <col style="width:11%">
+              <col style="width:11%">
+              <col style="width:13%">
+              <col style="width:13%">
+              <col style="width:11%">
             </colgroup>
             <thead><tr>
               <th style="padding:4px 6px">Game</th>
@@ -818,9 +819,10 @@ input[type=number] { -moz-appearance:textfield; }
               <th style="text-align:right;padding:4px 4px">BO</th>
               <th style="text-align:right;padding:4px 4px">Mdl</th>
               <th style="text-align:right;padding:4px 4px">Edge</th>
+              <th style="text-align:right;padding:4px 4px">½K%</th>
             </tr></thead>
             <tbody id="odds-summary-body">
-              <tr><td colspan="7" class="nd">Load a slate.</td></tr>
+              <tr><td colspan="8" class="nd">Load a slate.</td></tr>
             </tbody>
           </table>
         </div>
@@ -2458,7 +2460,7 @@ function rPicks(){
     const wc = p.uw>0?'var(--green)':p.uw<0?'var(--red)':'var(--muted)';
     return `<tr style="cursor:pointer;" onclick="openGameModal(${p.id})" title="Click to view game details">
       <td style="color:var(--muted);text-align:center">${S.picks.length - i}</td>
-      <td style="text-align:center"><button class="btn bg" style="padding:2px 6px;font-size:9px;" onclick="event.stopPropagation();openEditPick(${p.id},true)">✎</button></td>
+      <td style="text-align:center"><button class="btn bg" style="padding:2px 6px;font-size:9px;" onclick="event.stopPropagation();openEditPick(${p.id})">✎</button></td>
       <td style="color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${p.tp||'—'}</td>
       <td style="white-space:nowrap;font-size:11px">${p.dt}</td>
       <td style="font-weight:600;white-space:nowrap"><img src="${teamLogo(p.tx)}" width="16" height="16" style="object-fit:contain;vertical-align:middle;margin-right:4px;" onerror="this.style.display='none'" />${p.tx||'—'}</td>
@@ -2808,7 +2810,7 @@ function toggleOddsTable(){
 
 function updGStats(calcs){
   const body = document.getElementById('odds-summary-body');
-  if(!calcs.length){ body.innerHTML='<tr><td colspan="7" class="nd">No games loaded.</td></tr>'; return; }
+  if(!calcs.length){ body.innerHTML='<tr><td colspan="8" class="nd">No games loaded.</td></tr>'; return; }
 
   // Returns true if game has already started (commenceTime is in the past)
   function gameStarted(g){
@@ -2913,6 +2915,7 @@ function updGStats(calcs){
       <td style="${awBoStyle}">${awBoStr}</td>
       <td style="${f}text-align:right;${awBg}color:var(--accent)">${fmtO(r.awMO)}</td>
       <td data-edge="${gid}-aw" style="${f}text-align:right;font-weight:700;color:#000;${awBg}">${ae!=null?(awEdge>=0?'+':'')+ae+'%':'—'}</td>
+      <td style="${f}text-align:right;color:var(--muted);${awBg}">${awEdge!=null&&awEdge>0?(()=>{const ku=calcKellyUnits(g.myAwOdds||bestOf(started?null:g.awayOdds,g.awayBO)||0,awEdge*100);const pct=Math.min(ku*(S.br.kelly||0.5),S.br.maxPct||3);return pct>0?pct.toFixed(1)+'%':'—';})():'—'}</td>
     </tr><tr style="border-bottom:2px solid var(--border);">
       <td style="${f}color:#000;font-weight:600;${hwBg}cursor:pointer;" title="Click to log bet" onclick="logTeam(this)" data-gid="${gid}" data-team="${g.home}" data-opp="${g.away}" data-edge="${he}" data-xwp="${(n(r.hwWP)*100).toFixed(2)}" data-time="${r.gameTime||''}" data-home="true" data-fallback="${g.myHwOdds||g.homeOdds||g.homeBO}" class="odds-team-cell">
         <img src="${teamLogo(g.home)}" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display='none'" />
@@ -2927,6 +2930,7 @@ function updGStats(calcs){
       <td style="${hwBoStyle}">${hwBoStr}</td>
       <td style="${f}text-align:right;${hwBg}color:var(--accent)">${fmtO(r.hwMO)}</td>
       <td data-edge="${gid}-hw" style="${f}text-align:right;font-weight:700;color:#000;${hwBg}">${he!=null?(hwEdge>=0?'+':'')+he+'%':'—'}</td>
+      <td style="${f}text-align:right;color:var(--muted);${hwBg}">${hwEdge!=null&&hwEdge>0?(()=>{const ku=calcKellyUnits(g.myHwOdds||bestOf(started?null:g.homeOdds,g.homeBO)||0,hwEdge*100);const pct=Math.min(ku*(S.br.kelly||0.5),S.br.maxPct||3);return pct>0?pct.toFixed(1)+'%':'—';})():'—'}</td>
     </tr>`);
   });
   body.innerHTML = rows.join('');
@@ -3117,7 +3121,8 @@ function revertSwap(gid, side, slotIdx){
   } else {
     delete g.lineupOverrides[key];
   }
-  logActivity(`${g.away||gid} lineup revert: ${revertedName} → ${restoredName} (${getActiveDate().slice(5,7)}/${getActiveDate().slice(8,10)})`, g.away);
+  const revertTeamAbr = side==='aw' ? g.away : g.home;
+  logActivity(`${revertTeamAbr||gid} lineup revert: ${revertedName} → ${restoredName} (${getActiveDate().slice(5,7)}/${getActiveDate().slice(8,10)})`, revertTeamAbr);
   save();
   rGames();
 }
@@ -4614,7 +4619,7 @@ function openEditPick(id, isOvernight){
   if(!p) return;
   _editPickId = id;
   document.getElementById('ep-tp').value  = p.tp || '';
-  document.getElementById('ep-dt').value  = p.dt || '';
+  document.getElementById('ep-dt').value  = p.dt ? dateToYMD(p.dt) : '';
   document.getElementById('ep-gt').value  = p.gt || '';
   document.getElementById('ep-tx').value  = p.tx || '';
   document.getElementById('ep-opp').value = p.opp || '';
@@ -4647,8 +4652,10 @@ function saveEditPick(){
     ? S.overnights.find(p => p.id === _editPickId)
     : S.picks.find(p => p.id === _editPickId);
   if(!p) return;
+  const _oldOd = p.od; // capture before mutation for activity log
   p.tp  = document.getElementById('ep-tp').value.trim() || p.tp;
-  p.dt  = document.getElementById('ep-dt').value;
+  const _epDt = document.getElementById('ep-dt').value;
+  if(_epDt) { const [_y,_m,_d]=_epDt.split('-'); p.dt=`${_m}/${_d}/${_y}`; }
   p.gt  = document.getElementById('ep-gt').value.trim();
   p.tx  = document.getElementById('ep-tx').value.trim();
   p.opp = document.getElementById('ep-opp').value.trim();
@@ -4667,7 +4674,8 @@ function saveEditPick(){
   } else {
     savePickToFirebase(p);
   }
-  logActivity(`Pick edited: ${p.tx} ${p.od>0?'+':''}${p.od} vs ${p.opp} → ${p.rs} (${fmtDt(p.dt)})`, p.tx);
+  const _odStr = o => o>0?`+${o}`:String(o);
+  logActivity(`Pick edited: ${p.tx} ${_odStr(_oldOd)} → ${_odStr(p.od)} (${fmtDt(p.dt)})`, p.tx);
   localStorage.setItem('mlb26v3',JSON.stringify(S));
   closeEditPick();
   if(_editPickIsOvernight){ rOvernights(); } else { rPicks(); rPerf(); }
