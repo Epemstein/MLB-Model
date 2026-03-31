@@ -514,7 +514,8 @@ def run():
         gm['aw_edge'] = round((aw_wp - impl(aw_best))*100, 2) if aw_best else None
         gm['hw_edge'] = round((hw_wp - impl(hw_best))*100, 2) if hw_best else None
 
-        # Alert on BO edge only
+        # Alert on BO edge only — confirmed lineups only
+        if not gm['has_lineup']: continue
         for team, opp, side, odds, wp, edge in [
             (aw, hw, 'away', gm['aw_odds'], aw_wp, gm['aw_edge']),
             (hw, aw, 'home', gm['hw_odds'], hw_wp, gm['hw_edge']),
