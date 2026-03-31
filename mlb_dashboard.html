@@ -1412,7 +1412,7 @@ const PROXY_BASE = isLocal ? `${window.location.protocol}//${window.location.hos
 // ═══════════════════════════════════════════════
 // STORE
 // ═══════════════════════════════════════════════
-const S={games:[],spOverrides:{},ipOverrides:{},picks:[],overnights:[],global:[],br:{start:10000,unit:100,kelly:0.5,maxPct:3},apiKey:'',lastFetch:null,_dailyBR:{}};
+const S={games:[],spOverrides:{},ipOverrides:{},picks:[],overnights:[],global:[],br:{start:10000,unit:100,kelly:0.5,maxPct:3},apiKey:'',lastFetch:null,_dailyBR:{},_lastConfirmedBR:null};
 function save(){
   // Save everything EXCEPT games to localStorage — games live in Firestore by date
   try{
@@ -2449,7 +2449,7 @@ Logged by ${user}`;
 }
 
 function addPick(){
-  if(!_brLoaded){ toast('Bankroll loading — try again in a moment', 'err'); return; }
+  if(!_brLoaded || !_picksLoaded){ toast('Still loading — try again in a moment', 'err'); return; }
   const dt  = document.getElementById('p-dt').value;
   const gt  = document.getElementById('p-gt').value.trim();
   const tx  = document.getElementById('p-tx').value.trim();
@@ -3573,7 +3573,7 @@ function goToday(){
 }
 
 function logTeam(el){
-  if(!_brLoaded){ toast('Bankroll loading — try again in a moment', 'err'); return; }
+  if(!_brLoaded || !_picksLoaded){ toast('Still loading — try again in a moment', 'err'); return; }
   const gid      = el.dataset.gid;
   const team     = el.dataset.team;
   const opp      = el.dataset.opp;
@@ -3864,20 +3864,37 @@ function calcAutoStartBR(todayYMD){
     }
   }
 
-  if(!confirmedYMD) return { amount: S.br.start || 10000, basis: 'settings' };
+  // If no manual confirmation found, chain from the settings start
+  // using ALL settled picks to derive today's balance dynamically
+  if(!confirmedYMD){
+    let runningBalance = S.br.start || 10000;
+    // Get all settled picks sorted by date ascending
+    const settled = S.picks
+      .filter(p => p.rs !== 'Pending')
+      .sort((a,b) => {
+        const ay = a.dt.includes('/') ? dateToYMD(a.dt) : a.dt;
+        const by = b.dt.includes('/') ? dateToYMD(b.dt) : b.dt;
+        return ay < by ? -1 : ay > by ? 1 : 0;
+      });
+    // Chain through each pick's P&L up to but not including today
+    for(const p of settled){
+      const pYMD = p.dt.includes('/') ? dateToYMD(p.dt) : p.dt;
+      if(pYMD >= todayYMD) break;
+      runningBalance += pickPnlDollarGlobal(p, runningBalance);
+    }
+    return { amount: runningBalance, basis: 'settings' };
+  }
 
-  // Now chain forward from confirmedYMD through each day up to (but not including) todayYMD
+  // Chain forward from confirmedYMD through each day up to (but not including) todayYMD
   let runningBalance = confirmedAmount;
   const start = new Date(confirmedYMD + 'T12:00:00Z');
   const end   = new Date(todayYMD + 'T12:00:00Z');
 
   for(let d = new Date(start); d < end; d.setUTCDate(d.getUTCDate() + 1)){
     const ymd = d.toISOString().slice(0,10);
-    // If this intermediate day has its own confirmed start, use that instead
     if(ymd !== confirmedYMD && S._dailyBR && S._dailyBR[ymd] && S._dailyBR[ymd].confirmed){
       runningBalance = S._dailyBR[ymd].start;
     }
-    // Apply this day's settled P&L using runningBalance as the anchor
     const dayPicks = S.picks.filter(p => {
       const pYMD = p.dt.includes('/') ? dateToYMD(p.dt) : p.dt;
       return pYMD === ymd && p.rs !== 'Pending';
@@ -3899,6 +3916,12 @@ function confirmDailyBR(ymd, amount){
   S._dailyBR[ymd] = { start: amount, confirmed: true };
   try {
     db.collection('bankroll').doc('daily_' + ymd).set({ start: amount, confirmed: true, date: ymd });
+    // Always keep last_confirmed up to date so new users load correct BR instantly
+    const existing = S._lastConfirmedBR;
+    if(!existing || ymd >= existing.date){
+      db.collection('bankroll').doc('last_confirmed').set({ start: amount, date: ymd });
+      S._lastConfirmedBR = { start: amount, date: ymd };
+    }
   } catch(e){ console.warn('Daily BR Firestore save failed', e); }
   localStorage.setItem('mlb26v3', JSON.stringify(S));
   renderKellyTracker();
@@ -4610,6 +4633,7 @@ let _standingsLeague = 'AL';
 let _lastAutoUpdateMs = 0;
 let _lastManualFetchMs = 0;
 let _brLoaded = false;
+let _picksLoaded = false;
 
 function updateFetchAgo(){
   const agoEl = document.getElementById('hdr-fetch-ago');
@@ -5018,7 +5042,14 @@ function setDayStart(ymd, value){
     const amount = parseFloat(value);
     if(isNaN(amount) || amount <= 0) return;
     S._dailyBR[ymd] = { start: amount, confirmed: true };
-    try { db.collection('bankroll').doc('daily_' + ymd).set({ start: amount, confirmed: true, date: ymd }); } catch(e){}
+    try {
+      db.collection('bankroll').doc('daily_' + ymd).set({ start: amount, confirmed: true, date: ymd });
+      const existing = S._lastConfirmedBR;
+      if(!existing || ymd >= existing.date){
+        db.collection('bankroll').doc('last_confirmed').set({ start: amount, date: ymd });
+        S._lastConfirmedBR = { start: amount, date: ymd };
+      }
+    } catch(e){}
     toast('Start set: $' + Math.round(amount).toLocaleString() + ' for ' + ymd);
   }
   localStorage.setItem('mlb26v3', JSON.stringify(S));
@@ -5312,6 +5343,7 @@ function setupRealtimeListeners(){
   // ── Picks: real-time listener ──
   db.collection('picks').orderBy('id').onSnapshot(snap => {
     S.picks = snap.docs.map(d => d.data());
+    _picksLoaded = true;
     rPicks(); rPerf();
     console.log('Picks synced:', S.picks.length);
   }, e => console.error('Picks listener error:', e));
@@ -5392,11 +5424,10 @@ async function loadFromFirebase(){
   try {
     // One-time load for initial render, then set up real-time listeners
     const today = getActiveDate();
-    const [gamesSnap, ovSnap, brSnap, dailyBRSnap] = await Promise.all([
+    const [gamesSnap, ovSnap, brSnap] = await Promise.all([
       db.collection('games').doc(today).get(),
       db.collection('overrides').doc('current').get(),
       db.collection('bankroll').doc('settings').get(),
-      db.collection('bankroll').doc('daily_' + today).get(),
     ]);
     if(gamesSnap.exists){
       const dbGames = gamesSnap.data().games || [];
@@ -5415,9 +5446,21 @@ async function loadFromFirebase(){
     }
     if(brSnap.exists){ S.br = {...S.br, ...brSnap.data()}; _brLoaded = true; }
 
-    // Load daily BR snapshot for today
+    // Load last_confirmed + today's daily BR — works regardless of how long ago user last logged in
     if(!S._dailyBR) S._dailyBR = {};
-    if(dailyBRSnap.exists) S._dailyBR[today] = dailyBRSnap.data();
+    const [lastConfirmedSnap, todayDailySnap] = await Promise.all([
+      db.collection('bankroll').doc('last_confirmed').get(),
+      db.collection('bankroll').doc('daily_' + today).get(),
+    ]);
+    if(lastConfirmedSnap.exists){
+      const lc = lastConfirmedSnap.data();
+      S._lastConfirmedBR = lc;
+      // Backfill S._dailyBR so calcAutoStartBR can find it
+      if(lc.date && !S._dailyBR[lc.date]){
+        S._dailyBR[lc.date] = { start: lc.start, confirmed: true, date: lc.date };
+      }
+    }
+    if(todayDailySnap.exists) S._dailyBR[today] = todayDailySnap.data();
 
     // Load projections from localStorage
     load();
