@@ -753,7 +753,7 @@ input[type=number] { -moz-appearance:textfield; }
   <div class="logo">MLB<em> / </em>ALGO<em style="font-size:12px;"> 2026</em></div>
   <div style="display:flex;gap:10px;align-items:center;">
     <div class="hpill">DATE: <strong id="hdr-date">—</strong></div>
-    <div class="hpill">LAST FETCH: <strong id="hdr-fetch">—</strong></div>
+    <div class="hpill">LAST FETCH: <strong id="hdr-fetch">—</strong> <span id="hdr-fetch-ago" style="font-size:9px;color:rgba(255,255,255,.55);margin-left:4px;"></span></div>
     <div class="hpill" id="hdr-user" style="display:none;gap:6px;align-items:center;">
       <img id="hdr-photo" src="" width="18" height="18" style="border-radius:50%;object-fit:cover;" onerror="this.style.display='none'" />
       <span>Logged in as <strong id="hdr-name">—</strong></span>
@@ -1598,6 +1598,8 @@ async function fetchMLBGames(){
     S.games = games;
     S.lastFetch = date;
     document.getElementById('hdr-fetch').textContent = date;
+    _lastManualFetchMs = Date.now();
+    updateFetchAgo();
     save();
     logActivity(`Fetched slate: ${games.length} games for ${date}`, '', 'lineup');
     rGames();
@@ -4603,6 +4605,22 @@ function clearProjSnapshot(tab){
 let _standingsData = null;
 let _standingsFetchedAt = 0;
 let _standingsLeague = 'AL';
+let _lastAutoUpdateMs = 0;
+let _lastManualFetchMs = 0;
+
+function updateFetchAgo(){
+  const agoEl = document.getElementById('hdr-fetch-ago');
+  if(!agoEl) return;
+  const ms = Math.max(_lastAutoUpdateMs, _lastManualFetchMs);
+  if(!ms){ agoEl.textContent = ''; return; }
+  const mins = Math.floor((Date.now() - ms) / 60000);
+  const label = _lastManualFetchMs >= _lastAutoUpdateMs ? 'manual' : 'auto';
+  if(mins < 1) agoEl.textContent = `(${label}, just now)`;
+  else if(mins === 1) agoEl.textContent = `(${label}, 1 min ago)`;
+  else agoEl.textContent = `(${label}, ${mins} min ago)`;
+}
+// Tick every 30 seconds
+setInterval(updateFetchAgo, 30000);
 
 // ── Results Grid ──────────────────────────────────────────────────────────
 let _resultsGrid = {};       // { 'NYY': { '2026-03-25': 'W vs BOS', ... }, ... }
@@ -5301,6 +5319,49 @@ function setupRealtimeListeners(){
     rGlobal();
     console.log('Global synced:', S.global.length);
   }, e => console.error('Global listener error:', e));
+
+  // ── Auto-slate: real-time listener (written by GitHub Actions pipeline) ──
+  const today = getActiveDate();
+  db.collection('auto_slate').doc(today).onSnapshot(snap => {
+    if(!snap.exists) return;
+    const data = snap.data();
+    if(!data || !data.games) return;
+    const lastUpdatedMs = data.lastUpdatedMs || Date.now();
+    // Merge auto odds + lineups into S.games without wiping manual overrides
+    if(S.games && S.games.length){
+      // Update odds on existing games
+      for(const ag of data.games){
+        const sg = S.games.find(g => g.away === ag.away && g.home === ag.home);
+        if(!sg) continue;
+        if(ag.aw_odds != null && !sg.myAwOdds) sg.awayBO = ag.aw_odds;
+        if(ag.hw_odds != null && !sg.myHwOdds) sg.homeBO = ag.hw_odds;
+        if(ag.aw_novig != null) sg.awayOdds = ag.aw_novig;
+        if(ag.hw_novig != null) sg.homeOdds = ag.hw_novig;
+      }
+      save(); rGames();
+    } else {
+      // No manual fetch yet — load full auto slate
+      S.games = data.games.map(ag => ({
+        id: ag.id,
+        away: ag.away, home: ag.home,
+        commenceTime: ag.game_time_utc || '',
+        awaySpName: ag.aw_sp_name || '', homeSpName: ag.hw_sp_name || '',
+        awaySpWar: ag.aw_sp_war162 || 0, homeSpWar: ag.hw_sp_war162 || 0,
+        awayOdds: ag.aw_novig, homeOdds: ag.hw_novig,
+        awayBO: ag.aw_odds, homeBO: ag.hw_odds,
+        hasBMLineup: ag.has_lineup || false,
+        hasLineup: false,
+        lineupOverrides: {},
+        awConfirmed: false, hwConfirmed: false,
+      }));
+      S.lastFetch = 'auto';
+      save(); rGames();
+    }
+    // Update "X min ago" display
+    _lastAutoUpdateMs = lastUpdatedMs;
+    updateFetchAgo();
+    console.log('Auto-slate synced:', data.games.length, 'games');
+  }, e => console.error('Auto-slate listener error:', e));
   db.collection('overnight_picks').orderBy('id').onSnapshot(snap => {
     S.overnights = snap.docs.map(d => d.data());
     rOvernights();
