@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>xMLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -1577,8 +1577,19 @@ function applyFanGraphsLineups(games, fgGames){
     if(!game) continue;
 
     const lineupInfo = fg.lineups || {};
-    const awPlayers = (lineupInfo.lineupAway || []).sort((a,b) => a.BatOrder - b.BatOrder);
-    const hwPlayers = (lineupInfo.lineupHome || []).sort((a,b) => a.BatOrder - b.BatOrder);
+    // Filter out openers (OP) and probable pitchers (PP) from batting lineup
+    // PP = true starting pitcher in opener games — use as SP instead
+    const allAway = (lineupInfo.lineupAway || []).sort((a,b) => a.BatOrder - b.BatOrder);
+    const allHome = (lineupInfo.lineupHome || []).sort((a,b) => a.BatOrder - b.BatOrder);
+
+    const awPP = allAway.find(p => p.Position === 'PP');
+    const hwPP = allHome.find(p => p.Position === 'PP');
+    const awOP = allAway.find(p => p.Position === 'OP');
+    const hwOP = allHome.find(p => p.Position === 'OP');
+
+    // Strip OP and PP from batting lineup — they are pitchers, not batters
+    const awPlayers = allAway.filter(p => p.Position !== 'OP' && p.Position !== 'PP');
+    const hwPlayers = allHome.filter(p => p.Position !== 'OP' && p.Position !== 'PP');
 
     if(awPlayers.length >= 7 || hwPlayers.length >= 7){
       game.lineupOverrides = game.lineupOverrides || {};
@@ -1608,17 +1619,21 @@ function applyFanGraphsLineups(games, fgGames){
       matched++;
     }
 
-    // SP from FanGraphs (more reliable than MLB probable pitcher for future games)
-    const gi = lineupInfo.gameInfo || {};
-    if(gi.ProbableAwayPlayerName && !game.hasLineup){
-      const sp = findPitcher(awAbr, gi.ProbableAwayPlayerName);
+    // SP from FanGraphs — prefer PP (bulk pitcher in opener games) over gameInfo probable
+    const awSpName = awPP ? awPP.PlayerName : (lineupInfo.gameInfo?.ProbableAwayPlayerName || null);
+    const hwSpName = hwPP ? hwPP.PlayerName : (lineupInfo.gameInfo?.ProbableHomePlayerName || null);
+
+    if(awSpName && !game.awaySpManual){
+      const sp = findPitcher(awAbr, awSpName);
       if(sp){ game.awaySpName = sp.name; game.awaySpWar = sp.war162; }
-      else { game.awaySpName = gi.ProbableAwayPlayerName; }
+      else { game.awaySpName = awSpName; game.awaySpWar = 0; }
+      game.awaySpIsPP = !!awPP;
     }
-    if(gi.ProbableHomePlayerName && !game.hasLineup){
-      const sp = findPitcher(hwAbr, gi.ProbableHomePlayerName);
+    if(hwSpName && !game.homeSpManual){
+      const sp = findPitcher(hwAbr, hwSpName);
       if(sp){ game.homeSpName = sp.name; game.homeSpWar = sp.war162; }
-      else { game.homeSpName = gi.ProbableHomePlayerName; }
+      else { game.homeSpName = hwSpName; game.homeSpWar = 0; }
+      game.homeSpIsPP = !!hwPP;
     }
   }
   console.log(`FanGraphs lineups: matched ${matched}/${games.length} games`);
@@ -2160,11 +2175,11 @@ function rGames(){
 
       <div class="gc-sp">
         <div class="gc-sp-side" onclick="openSpModal('${gid}','aw','${g.away}')" style="cursor:pointer;${g.awaySpManual?'background:#fff3cd;border-left:3px solid #e6a817;':''}" title="Click to change pitcher">
-          <span class="sp-name">${r.awSpName||'TBD'}${g.awaySpManual ? spSubLabel(gid,'aw') : ''}</span>
+          <span class="sp-name">${r.awSpName||'TBD'}${g.awaySpManual ? spSubLabel(gid,'aw') : ''}${g.awaySpIsPP ? ' <span style="font-size:9px;font-weight:700;background:#e3f2fd;color:#1565c0;border-radius:3px;padding:1px 4px;margin-left:4px;vertical-align:middle;">PP</span>' : ''}</span>
           <span class="sp-hand">${n(r.awSpWar162).toFixed(2)}</span>
         </div>
         <div class="gc-sp-side" onclick="openSpModal('${gid}','hw','${g.home}')" style="cursor:pointer;${g.homeSpManual?'background:#fff3cd;border-left:3px solid #e6a817;':''}" title="Click to change pitcher">
-          <span class="sp-name">${r.hwSpName||'TBD'}${g.homeSpManual ? spSubLabel(gid,'hw') : ''}</span>
+          <span class="sp-name">${r.hwSpName||'TBD'}${g.homeSpManual ? spSubLabel(gid,'hw') : ''}${g.homeSpIsPP ? ' <span style="font-size:9px;font-weight:700;background:#e3f2fd;color:#1565c0;border-radius:3px;padding:1px 4px;margin-left:4px;vertical-align:middle;">PP</span>' : ''}</span>
           <span class="sp-hand">${n(r.hwSpWar162).toFixed(2)}</span>
         </div>
       </div>
