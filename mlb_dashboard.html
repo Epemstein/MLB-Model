@@ -790,7 +790,7 @@ input[type=number] { -moz-appearance:textfield; }
   <div style="display:flex;gap:14px;align-items:flex-start;">
 
     <!-- LEFT: Odds Summary -->
-    <div style="flex:0 0 420px;min-width:0;">
+    <div style="flex:0 0 520px;min-width:0;">
       <div class="card" style="padding:0;overflow:hidden;">
         <div id="odds-table-hdr" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border);">
           <span onclick="toggleOddsTable()" style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);cursor:pointer;user-select:none;">Odds Summary</span>
@@ -2462,7 +2462,7 @@ function rPicks(){
       <td style="color:var(--muted);text-align:center">${S.picks.length - i}</td>
       <td style="text-align:center"><button class="btn bg" style="padding:2px 6px;font-size:9px;" onclick="event.stopPropagation();openEditPick(${p.id})">✎</button></td>
       <td style="color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${p.tp||'—'}</td>
-      <td style="white-space:nowrap;font-size:11px">${p.dt}</td>
+      <td style="white-space:nowrap;font-size:11px">${fmtDtFull(p.dt)}</td>
       <td style="font-weight:600;white-space:nowrap"><img src="${teamLogo(p.tx)}" width="16" height="16" style="object-fit:contain;vertical-align:middle;margin-right:4px;" onerror="this.style.display='none'" />${p.tx||'—'}</td>
       <td style="color:var(--muted)">${p.ha||'vs'} ${p.opp||'—'}</td>
       <td style="color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${p.gt||'—'}</td>
@@ -2715,7 +2715,7 @@ function rOvernights(){
       <td style="color:var(--muted);text-align:center">${S.overnights.length - i}</td>
       <td style="text-align:center"><button class="btn bg" style="padding:2px 6px;font-size:9px;" onclick="openEditOvernight(${p.id})">✎</button></td>
       <td style="color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${p.tp||'—'}</td>
-      <td style="white-space:nowrap;font-size:11px">${p.dt}</td>
+      <td style="white-space:nowrap;font-size:11px">${fmtDtFull(p.dt)}</td>
       <td style="font-weight:600;white-space:nowrap"><img src="${teamLogo(p.tx)}" width="16" height="16" style="object-fit:contain;vertical-align:middle;margin-right:4px;" onerror="this.style.display='none'" />${p.tx||'—'}</td>
       <td style="color:var(--muted)">${p.ha||'vs'} ${p.opp||'—'}</td>
       <td style="color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${p.gt||'—'}</td>
@@ -2854,7 +2854,7 @@ function updGStats(calcs){
     const awBg = edgeBg(awEdge != null ? awEdge*100 : 0);
     const hwBg = edgeBg(hwEdge != null ? hwEdge*100 : 0);
     const game = `${g.away} @ ${g.home}`;
-    const f = 'font-family:Calibri,sans-serif;';
+    const f = 'font-family:Calibri,sans-serif;vertical-align:middle;';
     const bothConfirmed = g.awConfirmed && g.hwConfirmed;
     const anyProjected = g.hasBMLineup && !bothConfirmed;
     const lineupDot = bothConfirmed
@@ -2902,7 +2902,7 @@ function updGStats(calcs){
         <div style="font-weight:600;color:var(--text)">${game}${lineupDot}</div>
         <div style="font-size:10px;margin-top:2px;">${r.gameTime||''}</div>
       </td>
-      <td style="${f}color:#000;font-weight:600;${awBg}cursor:pointer;" title="Click to log bet" onclick="logTeam(this)" data-gid="${gid}" data-team="${g.away}" data-opp="${g.home}" data-edge="${ae}" data-xwp="${(n(r.awWP)*100).toFixed(2)}" data-time="${r.gameTime||''}" data-home="false" data-fallback="${g.myAwOdds||g.awayOdds||g.awayBO}" class="odds-team-cell">
+      <td style="${f}color:#000;font-weight:600;${awBg}cursor:pointer;height:30px;vertical-align:middle;" title="Click to log bet" onclick="logTeam(this)" data-gid="${gid}" data-team="${g.away}" data-opp="${g.home}" data-edge="${ae}" data-xwp="${(n(r.awWP)*100).toFixed(2)}" data-time="${r.gameTime||''}" data-home="false" data-fallback="${g.myAwOdds||g.awayOdds||g.awayBO}" class="odds-team-cell">
         <img src="${teamLogo(g.away)}" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display='none'" />
         ${g.away}
       </td>
@@ -2915,9 +2915,9 @@ function updGStats(calcs){
       <td style="${awBoStyle}">${awBoStr}</td>
       <td style="${f}text-align:right;${awBg}color:var(--accent)">${fmtO(r.awMO)}</td>
       <td data-edge="${gid}-aw" style="${f}text-align:right;font-weight:700;color:#000;${awBg}">${ae!=null?(awEdge>=0?'+':'')+ae+'%':'—'}</td>
-      <td style="${f}text-align:right;color:var(--muted);${awBg}">${awEdge!=null&&awEdge>0?(()=>{const ku=calcKellyUnits(g.myAwOdds||bestOf(started?null:g.awayOdds,g.awayBO)||0,awEdge*100);const pct=Math.min(ku*(S.br.kelly||0.5),S.br.maxPct||3);return pct>0?pct.toFixed(1)+'%':'—';})():'—'}</td>
+      <td style="${f}text-align:right;color:var(--muted);${awBg}">${awEdge!=null&&awEdge>0?(()=>{const ku=calcKellyUnits(g.myAwOdds||bestOf(started?null:g.awayOdds,g.awayBO)||0,awEdge*100);const pct=Math.min(ku*(S.br.kelly||0.5),S.br.maxPct||3);return pct>0?pct.toFixed(2)+'%':'—';})():'—'}</td>
     </tr><tr style="border-bottom:2px solid var(--border);">
-      <td style="${f}color:#000;font-weight:600;${hwBg}cursor:pointer;" title="Click to log bet" onclick="logTeam(this)" data-gid="${gid}" data-team="${g.home}" data-opp="${g.away}" data-edge="${he}" data-xwp="${(n(r.hwWP)*100).toFixed(2)}" data-time="${r.gameTime||''}" data-home="true" data-fallback="${g.myHwOdds||g.homeOdds||g.homeBO}" class="odds-team-cell">
+      <td style="${f}color:#000;font-weight:600;${hwBg}cursor:pointer;height:30px;vertical-align:middle;" title="Click to log bet" onclick="logTeam(this)" data-gid="${gid}" data-team="${g.home}" data-opp="${g.away}" data-edge="${he}" data-xwp="${(n(r.hwWP)*100).toFixed(2)}" data-time="${r.gameTime||''}" data-home="true" data-fallback="${g.myHwOdds||g.homeOdds||g.homeBO}" class="odds-team-cell">
         <img src="${teamLogo(g.home)}" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display='none'" />
         ${g.home}
       </td>
@@ -2930,7 +2930,7 @@ function updGStats(calcs){
       <td style="${hwBoStyle}">${hwBoStr}</td>
       <td style="${f}text-align:right;${hwBg}color:var(--accent)">${fmtO(r.hwMO)}</td>
       <td data-edge="${gid}-hw" style="${f}text-align:right;font-weight:700;color:#000;${hwBg}">${he!=null?(hwEdge>=0?'+':'')+he+'%':'—'}</td>
-      <td style="${f}text-align:right;color:var(--muted);${hwBg}">${hwEdge!=null&&hwEdge>0?(()=>{const ku=calcKellyUnits(g.myHwOdds||bestOf(started?null:g.homeOdds,g.homeBO)||0,hwEdge*100);const pct=Math.min(ku*(S.br.kelly||0.5),S.br.maxPct||3);return pct>0?pct.toFixed(1)+'%':'—';})():'—'}</td>
+      <td style="${f}text-align:right;color:var(--muted);${hwBg}">${hwEdge!=null&&hwEdge>0?(()=>{const ku=calcKellyUnits(g.myHwOdds||bestOf(started?null:g.homeOdds,g.homeBO)||0,hwEdge*100);const pct=Math.min(ku*(S.br.kelly||0.5),S.br.maxPct||3);return pct>0?pct.toFixed(2)+'%':'—';})():'—'}</td>
     </tr>`);
   });
   body.innerHTML = rows.join('');
@@ -3463,6 +3463,12 @@ function fmtDt(dt){
   if(!dt) return '—';
   if(dt.includes('-')) return dt.slice(5,7)+'/'+dt.slice(8,10); // YYYY-MM-DD → MM/DD
   return dt.slice(0,5); // MM/DD/YYYY → MM/DD
+}
+function fmtDtFull(dt){
+  // Returns MM/DD/YYYY from either format
+  if(!dt) return '—';
+  if(dt.includes('-')){ const[y,m,d]=dt.split('-'); return `${m}/${d}/${y}`; }
+  return dt; // already MM/DD/YYYY
 }
 function dateToYMD(mmddyyyy){
   // converts "03/27/2026" → "2026-03-27"
