@@ -110,8 +110,15 @@ def fmt_odds(od):
 
 # ── Model functions (exact port of JS) ────────────────────────────────────
 
-def get_ip_start(p):
-    """Port of JS getIpStart() — no IP overrides in pipeline"""
+def get_ip_start(p, ip_overrides=None):
+    """Port of JS getIpStart() — applies IP overrides from Firestore"""
+    if ip_overrides:
+        # Key format matches JS pitcherKey(): "name|team"
+        name = p.get('name', '')
+        team = p.get('team', '')
+        key = f'{name}|{team}'
+        if key in ip_overrides:
+            return float(ip_overrides[key])
     gs = p.get('gs', 0) or 0
     g  = p.get('g', 0) or 0
     ip = p.get('ip', 0) or 0
@@ -120,21 +127,21 @@ def get_ip_start(p):
         return raw if raw > 0 else 5.0
     return 5.0
 
-def get_pitcher_war162(p):
+def get_pitcher_war162(p, ip_overrides=None):
     """Port of JS getPitcherWar162()"""
-    ip_start = get_ip_start(p)
-    ip = p.get('ip', 0) or 0
+    ip_start = get_ip_start(p, ip_overrides)
+    ip  = p.get('ip', 0) or 0
     war = p.get('war', 0) or 0
     war_ip = war / ip if ip > 0 else 0
     return ip_start * war_ip * 32
 
-def get_team_rotation_baseline(team, proj_pitchers):
+def get_team_rotation_baseline(team, proj_pitchers, ip_overrides=None):
     """Port of JS getTeamRotationBaseline() — top 5 starters by GS"""
     starters = [p for p in proj_pitchers if p.get('team') == team and (p.get('gs') or 0) > 0]
     starters.sort(key=lambda p: -(p.get('gs') or 0))
-    return sum(get_pitcher_war162(p) for p in starters[:5])
+    return sum(get_pitcher_war162(p, ip_overrides) for p in starters[:5])
 
-def calc_all_proj_wins(proj_hitters, proj_pitchers, standings_gp):
+def calc_all_proj_wins(proj_hitters, proj_pitchers, standings_gp, ip_overrides=None):
     """
     Port of JS calcAllProjWins().
     standings_gp: dict of {team: games_played} from live standings
@@ -173,7 +180,7 @@ def find_pitcher(team, sp_name, proj_pitchers):
     return None
 
 def model_calc(aw, hw, aw_sp_name, hw_sp_name, proj_hitters, proj_pitchers,
-               proj_wins, aw_lineup=None, hw_lineup=None, debug=False):
+               proj_wins, aw_lineup=None, hw_lineup=None, debug=False, ip_overrides=None):
     """
     Full port of JS modelCalc().
     aw_lineup / hw_lineup: list of dicts {name, war, pa, g} for confirmed batters
@@ -190,10 +197,10 @@ def model_calc(aw, hw, aw_sp_name, hw_sp_name, proj_hitters, proj_pitchers,
     def stage_calc(team, sp_name, p_wins, lineup_players, is_home):
         # 1. SP WAR/162
         sp = find_pitcher(team, sp_name, proj_pitchers)
-        sp_war162 = get_pitcher_war162(sp) if sp else 0.0
+        sp_war162 = get_pitcher_war162(sp, ip_overrides) if sp else 0.0
 
         # 2. Rotation baseline — top 5 starters by GS
-        rotation = get_team_rotation_baseline(team, proj_pitchers)
+        rotation = get_team_rotation_baseline(team, proj_pitchers, ip_overrides)
 
         # 3. Pitcher value + change
         pitcher_value = sp_war162 * 5
@@ -406,8 +413,19 @@ def run():
     # ── Standings GP for proj wins scaling ───────────────────────────────
     standings_gp = fetch_standings_gp()
 
+    # ── IP/SP overrides from Firestore ───────────────────────────────────
+    ip_overrides = {}
+    try:
+        ov_doc = db.collection('overrides').document('current').get()
+        if ov_doc.exists:
+            ov_data = ov_doc.to_dict() or {}
+            ip_overrides = ov_data.get('ipOverrides', {})
+            print(f'IP overrides loaded: {len(ip_overrides)} entries — {list(ip_overrides.keys())[:5]}')
+    except Exception as e:
+        print(f'IP overrides fetch failed: {e}')
+
     # ── Compute projected wins dynamically (same as JS) ───────────────────
-    proj_wins = calc_all_proj_wins(proj_hitters, proj_pitchers, standings_gp)
+    proj_wins = calc_all_proj_wins(proj_hitters, proj_pitchers, standings_gp, ip_overrides)
     print(f'Sample proj wins — NYY:{proj_wins.get("NYY",0):.1f} LAD:{proj_wins.get("LAD",0):.1f}')
 
     # ── MLB schedule ──────────────────────────────────────────────────────
@@ -438,6 +456,7 @@ def run():
             'hw_sp': g['teams']['home'].get('probablePitcher',{}).get('fullName',''),
             'aw_lineup': [], 'hw_lineup': [],
             'has_lineup': False,
+            'has_fg_lineup': False,
             'aw_odds': None, 'hw_odds': None,
             'aw_novig': None, 'hw_novig': None,
         })
@@ -474,29 +493,35 @@ def run():
                                 if p.get('Position') not in ('OP','PP')],
                                key=lambda x: x.get('BatOrder',99))
 
-                if len(aw_pl) >= 7 and len(hw_pl) >= 7:
-                    # Only mark confirmed if at least some players are NOT projected
-                    # mirrors JS: awPlayers.some(p => p.IsProjected === false)
-                    aw_confirmed = any(p.get('IsProjected') == False for p in aw_pl)
-                    hw_confirmed = any(p.get('IsProjected') == False for p in hw_pl)
-                    gm['has_lineup'] = aw_confirmed and hw_confirmed
-                    # Map FG players to projection data for WAR
-                    def map_players(players, team):
-                        result = []
-                        for p in players[:9]:
-                            pname = p.get('PlayerName','')
-                            pnorm = norm_name(pname)
-                            match = next(
-                                (h for h in proj_hitters
-                                 if h.get('team')==team and norm_name(h.get('name',''))==pnorm),
-                                None
-                            )
-                            if match:
-                                result.append(match)
-                            else:
-                                result.append({'name':pname,'team':team,'g':150,'pa':500,'war':0})
-                        return result
+                # has_fg_lineup = FG returned data (always use for model)
+                # has_lineup = both teams confirmed (gates TG alerts only)
+                if len(aw_pl) >= 7:
+                    gm['has_fg_lineup'] = True
+                if len(hw_pl) >= 7:
+                    gm['has_fg_lineup'] = True
+                aw_confirmed = len(aw_pl) >= 7 and any(p.get('IsProjected') == False for p in aw_pl)
+                hw_confirmed = len(hw_pl) >= 7 and any(p.get('IsProjected') == False for p in hw_pl)
+                gm['has_lineup'] = aw_confirmed and hw_confirmed
+
+                def map_players(players, team):
+                    result = []
+                    for p in players[:9]:
+                        pname = p.get('PlayerName','')
+                        pnorm = norm_name(pname)
+                        match = next(
+                            (h for h in proj_hitters
+                             if h.get('team')==team and norm_name(h.get('name',''))==pnorm),
+                            None
+                        )
+                        if match:
+                            result.append(match)
+                        else:
+                            result.append({'name':pname,'team':team,'g':150,'pa':500,'war':0})
+                    return result
+
+                if len(aw_pl) >= 7:
                     gm['aw_lineup'] = map_players(aw_pl, aw_abr)
+                if len(hw_pl) >= 7:
                     gm['hw_lineup'] = map_players(hw_pl, hw_abr)
             print('FanGraphs lineups applied')
         else:
@@ -541,17 +566,18 @@ def run():
 
     for gm in games:
         aw, hw = gm['away'], gm['home']
-        print(f'\n=== {aw}@{hw} lineup={gm["has_lineup"]} aw_sp={gm["aw_sp"]!r} hw_sp={gm["hw_sp"]!r} ===')
-        if gm['has_lineup'] and gm['aw_lineup']:
+        print(f'\n=== {aw}@{hw} lineup={gm["has_lineup"]} fg={gm["has_fg_lineup"]} aw_sp={gm["aw_sp"]!r} hw_sp={gm["hw_sp"]!r} ===')
+        if gm['aw_lineup']:
             print(f'  AW lineup: {[(p.get("name","?"), round(war162(p),3)) for p in gm["aw_lineup"][:9]]}')
-        if gm['has_lineup'] and gm['hw_lineup']:
+        if gm['hw_lineup']:
             print(f'  HW lineup: {[(p.get("name","?"), round(war162(p),3)) for p in gm["hw_lineup"][:9]]}')
         aw_wp, hw_wp = model_calc(
             aw, hw, gm['aw_sp'], gm['hw_sp'],
             proj_hitters, proj_pitchers, proj_wins,
-            gm['aw_lineup'] if gm['has_lineup'] else None,
-            gm['hw_lineup'] if gm['has_lineup'] else None,
+            gm['aw_lineup'] if gm['aw_lineup'] else None,
+            gm['hw_lineup'] if gm['hw_lineup'] else None,
             debug=True,
+            ip_overrides=ip_overrides,
         )
         gm['aw_wp'] = round(aw_wp*100, 2)
         gm['hw_wp'] = round(hw_wp*100, 2)
