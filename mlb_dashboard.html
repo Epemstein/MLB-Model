@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>xxMLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -177,6 +177,7 @@ main { padding: 16px 20px; max-width: 1400px; margin: 0 auto; }
 }
 
 /* team header rows — colored band with logo watermark */
+#odds-summary-table thead th { position:sticky;top:0;z-index:2;background:var(--surface);box-shadow:0 1px 0 var(--border); }
 .gc-teams { display: flex; }
 .gc-team-hdr {
   flex: 1;
@@ -799,8 +800,8 @@ input[type=number] { -moz-appearance:textfield; }
             <span id="odds-toggle-icon" onclick="toggleOddsTable()" style="font-size:11px;color:var(--muted);cursor:pointer;user-select:none;">▾</span>
           </div>
         </div>
-        <div id="odds-table-body">
-          <table class="dt" id="odds-summary-table" style="width:100%;font-family:Calibri,sans-serif;table-layout:fixed;font-size:11px;">
+        <div id="odds-table-body" style="max-height:60vh;overflow-y:auto;">
+          <table class="dt" id="odds-summary-table" style="width:100%;font-family:Calibri,sans-serif;table-layout:fixed;font-size:11px;border-collapse:separate;border-spacing:0;">
             <colgroup>
               <col style="width:18%">
               <col style="width:12%">
@@ -2915,7 +2916,7 @@ function updGStats(calcs){
       <td style="${awBoStyle}">${awBoStr}</td>
       <td style="${f}text-align:right;${awBg}color:var(--accent)">${fmtO(r.awMO)}</td>
       <td data-edge="${gid}-aw" style="${f}text-align:right;font-weight:700;color:#000;${awBg}">${ae!=null?(awEdge>=0?'+':'')+ae+'%':'—'}</td>
-      <td style="${f}text-align:right;color:var(--muted);${awBg}">${awEdge!=null&&awEdge>0?(()=>{const ku=calcKellyUnits(g.myAwOdds||bestOf(started?null:g.awayOdds,g.awayBO)||0,awEdge*100);const pct=Math.min(ku*(S.br.kelly||0.5),S.br.maxPct||3);return pct>0?pct.toFixed(2)+'%':'—';})():'—'}</td>
+      <td data-kelly="${gid}-aw" style="${f}text-align:right;color:var(--muted);${awBg}">${awEdge!=null&&awEdge>0?(()=>{const ku=calcKellyUnits(g.myAwOdds||bestOf(started?null:g.awayOdds,g.awayBO)||0,awEdge*100);const pct=Math.min(ku*(S.br.kelly||0.5),S.br.maxPct||3);return pct>0?pct.toFixed(2)+'%':'—';})():'—'}</td>
     </tr><tr style="border-bottom:2px solid var(--border);">
       <td style="${f}color:#000;font-weight:600;${hwBg}cursor:pointer;height:30px;vertical-align:middle;" title="Click to log bet" onclick="logTeam(this)" data-gid="${gid}" data-team="${g.home}" data-opp="${g.away}" data-edge="${he}" data-xwp="${(n(r.hwWP)*100).toFixed(2)}" data-time="${r.gameTime||''}" data-home="true" data-fallback="${g.myHwOdds||g.homeOdds||g.homeBO}" class="odds-team-cell">
         <img src="${teamLogo(g.home)}" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display='none'" />
@@ -2930,7 +2931,7 @@ function updGStats(calcs){
       <td style="${hwBoStyle}">${hwBoStr}</td>
       <td style="${f}text-align:right;${hwBg}color:var(--accent)">${fmtO(r.hwMO)}</td>
       <td data-edge="${gid}-hw" style="${f}text-align:right;font-weight:700;color:#000;${hwBg}">${he!=null?(hwEdge>=0?'+':'')+he+'%':'—'}</td>
-      <td style="${f}text-align:right;color:var(--muted);${hwBg}">${hwEdge!=null&&hwEdge>0?(()=>{const ku=calcKellyUnits(g.myHwOdds||bestOf(started?null:g.homeOdds,g.homeBO)||0,hwEdge*100);const pct=Math.min(ku*(S.br.kelly||0.5),S.br.maxPct||3);return pct>0?pct.toFixed(2)+'%':'—';})():'—'}</td>
+      <td data-kelly="${gid}-hw" style="${f}text-align:right;color:var(--muted);${hwBg}">${hwEdge!=null&&hwEdge>0?(()=>{const ku=calcKellyUnits(g.myHwOdds||bestOf(started?null:g.homeOdds,g.homeBO)||0,hwEdge*100);const pct=Math.min(ku*(S.br.kelly||0.5),S.br.maxPct||3);return pct>0?pct.toFixed(2)+'%':'—';})():'—'}</td>
     </tr>`);
   });
   body.innerHTML = rows.join('');
@@ -2975,6 +2976,26 @@ function updGStatsEdgeOnly(calcs){
     const hwCell = document.querySelector(`[data-edge="${gid}-hw"]`);
     if(awCell) awCell.textContent = (awEdge>=0?'+':'')+(awEdge*100).toFixed(2)+'%';
     if(hwCell) hwCell.textContent = (hwEdge>=0?'+':'')+(hwEdge*100).toFixed(2)+'%';
+
+    // Update ½K% cells dynamically
+    function kellyStr(edge, odds){
+      if(edge <= 0 || !odds) return '—';
+      const ku = calcKellyUnits(odds, edge*100);
+      const pct = Math.min(ku*(S.br.kelly||0.5), S.br.maxPct||3);
+      return pct > 0 ? pct.toFixed(2)+'%' : '—';
+    }
+    const started = g.commenceTime && Date.now() > new Date(g.commenceTime).getTime();
+    const awKellyCell = document.querySelector(`[data-kelly="${gid}-aw"]`);
+    const hwKellyCell = document.querySelector(`[data-kelly="${gid}-hw"]`);
+    if(awKellyCell){
+      const awOdds = g.myAwOdds || (started ? null : g.awayOdds) || g.awayBO || 0;
+      awKellyCell.textContent = kellyStr(awEdge, awOdds);
+    }
+    if(hwKellyCell){
+      const hwOdds = g.myHwOdds || (started ? null : g.homeOdds) || g.homeBO || 0;
+      hwKellyCell.textContent = kellyStr(hwEdge, hwOdds);
+    }
+
     // Extract just the rgba value (or empty string) for background
     function bgVal(edge){ const s=edgeBgStyle(edge); return s ? s.replace('background:','').replace(';','').trim() : ''; }
     if(awCell){
