@@ -252,8 +252,10 @@ def run():
     for g in mlb_games:
         aw_id = g['teams']['away']['team']['id']
         hw_id = g['teams']['home']['team']['id']
-        aw = MLB_ID_TO_ABR.get(aw_id, g['teams']['away']['team']['abbreviation'])
-        hw = MLB_ID_TO_ABR.get(hw_id, g['teams']['home']['team']['abbreviation'])
+        aw = MLB_ID_TO_ABR.get(aw_id, g['teams']['away']['team'].get('abbreviation', ''))
+        hw = MLB_ID_TO_ABR.get(hw_id, g['teams']['home']['team'].get('abbreviation', ''))
+        if not aw or not hw:
+            continue  # skip if we can't identify the team
         game_time_utc = g.get('gameDate', '')
         # Probable pitchers from MLB API
         aw_pp = g['teams']['away'].get('probablePitcher', {}).get('fullName', '')
