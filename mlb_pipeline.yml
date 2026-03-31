@@ -1,0 +1,30 @@
+name: MLB Pipeline
+
+on:
+  schedule:
+    # Every 20 minutes, 10am–11pm ET (14:00–03:00 UTC)
+    - cron: '0,20,40 14-23 * * *'
+    - cron: '0,20,40 0-3 * * *'
+  workflow_dispatch:  # allow manual trigger
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests firebase-admin
+
+      - name: Run pipeline
+        env:
+          FIREBASE_SA_JSON: ${{ secrets.FIREBASE_SA_JSON }}
+        run: python scripts/mlb_pipeline.py
