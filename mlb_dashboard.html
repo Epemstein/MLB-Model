@@ -768,6 +768,7 @@ input[type=number] { -moz-appearance:textfield; }
   <button onclick="showPanel('standings',this)">Standings</button>
   <button onclick="showPanel('activity',this)">Activity</button>
   <button onclick="showPanel('tools',this)">Tools</button>
+  <button onclick="showPanel('global',this)">Global</button>
 </nav>
 <div id="standings-pending-indicator" style="display:none;background:#7c5800;color:#ffe082;font-size:11px;font-family:var(--mono);padding:6px 20px;text-align:center;">⚠ Standings loading — projected wins and edges may be slightly off until complete</div>
 
@@ -1099,7 +1100,45 @@ input[type=number] { -moz-appearance:textfield; }
   </div>
 </div>
 
-<div id="panel-tools" class="panel">
+<!-- ══ GLOBAL ══ -->
+<div id="panel-global" class="panel">
+  <div class="card" style="margin-bottom:14px;">
+    <div class="ct">Global — Auto-Log</div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <label style="font-size:11px;color:var(--muted);white-space:nowrap;">Date:</label>
+        <input type="date" id="global-date" oninput="updateGlobalBtn()" style="font-size:11px;padding:4px 6px;border:1px solid var(--border2);border-radius:4px;" />
+      </div>
+      <button id="global-btn" onclick="runGlobal()" class="btn" style="padding:8px 18px;font-size:13px;font-weight:600;background:linear-gradient(to right,#e8f3ff,#c5dff8);color:#1a3a5c;border:1px solid #a8c8ee;border-radius:5px;box-shadow:3px 3px 8px rgba(0,0,0,.15);cursor:pointer;">
+        Global for —
+      </button>
+      <div style="font-size:11px;color:var(--muted);">Logs all confirmed-lineup games with positive BO edge at 1u. Confirmed lineups only.</div>
+      <span id="global-status" style="font-size:11px;font-family:var(--mono);color:var(--muted);"></span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ct">Global Pick Log <span id="gl-ct" style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);"></span></div>
+    <div class="sw"><table class="dt"><thead><tr>
+      <th style="width:42px">Bet No.</th>
+      <th style="width:28px"></th>
+      <th style="width:90px;white-space:nowrap">Placed</th>
+      <th style="width:70px">Date</th>
+      <th style="width:60px">Pick</th>
+      <th style="width:80px">Opp</th>
+      <th style="width:90px">Game Time</th>
+      <th style="width:60px;text-align:right">Odds</th>
+      <th style="width:45px;text-align:right">xWP</th>
+      <th style="width:55px;text-align:right">Edge</th>
+      <th style="width:55px;text-align:right">Bet</th>
+      <th style="width:60px">Result</th>
+      <th style="width:65px;text-align:right">Won</th>
+      <th style="width:75px;text-align:right">Running</th>
+      <th style="width:28px"></th>
+    </tr></thead><tbody id="glb"><tr><td colspan="15" class="nd">No global picks yet.</td></tr></tbody></table></div>
+  </div>
+</div>
+
+<!-- ══ TOOLS ══ -->
   <div class="g2">
     <div class="card">
       <div class="ct">Kelly Calculator</div>
@@ -1353,7 +1392,7 @@ const PROXY_BASE = isLocal ? `${window.location.protocol}//${window.location.hos
 // ═══════════════════════════════════════════════
 // STORE
 // ═══════════════════════════════════════════════
-const S={games:[],spOverrides:{},ipOverrides:{},picks:[],overnights:[],br:{start:10000,unit:100,kelly:0.5,maxPct:3},apiKey:'',lastFetch:null,_dailyBR:{}};
+const S={games:[],spOverrides:{},ipOverrides:{},picks:[],overnights:[],global:[],br:{start:10000,unit:100,kelly:0.5,maxPct:3},apiKey:'',lastFetch:null,_dailyBR:{}};
 function save(){
   // Save everything EXCEPT games to localStorage — games live in Firestore by date
   try{
@@ -1374,6 +1413,7 @@ function load(){
     if(d.lastFetch)S.lastFetch=d.lastFetch;
     if(d._dailyBR)S._dailyBR={...S._dailyBR,...d._dailyBR};
     if(d.overnights)S.overnights=d.overnights;
+    if(d.global)S.global=d.global;
   }catch(e){}
 }
 
@@ -2774,6 +2814,248 @@ async function deleteOvernightFromFirebase(id){
   try { await db.collection('overnight_picks').doc(String(id)).delete(); } catch(e){}
 }
 
+// ═══════════════════════════════════════════════
+// GLOBAL
+// ═══════════════════════════════════════════════
+
+function updateGlobalBtn(){
+  const input = document.getElementById('global-date');
+  const btn = document.getElementById('global-btn');
+  if(!input || !btn) return;
+  if(input.value){
+    const [y,m,d] = input.value.split('-');
+    btn.textContent = `Global for ${m}/${d}`;
+  } else {
+    btn.textContent = 'Global for —';
+  }
+}
+
+function initGlobalDate(){
+  const input = document.getElementById('global-date');
+  if(!input) return;
+  // Default to today
+  const d = new Date();
+  input.value = d.toISOString().slice(0,10);
+  updateGlobalBtn();
+}
+
+async function runGlobal(){
+  const dateInput = document.getElementById('global-date');
+  const date = dateInput?.value || new Date().toISOString().slice(0,10);
+  const btn = document.getElementById('global-btn');
+  const status = document.getElementById('global-status');
+  btn.disabled = true;
+  btn.textContent = '⟳ Running…';
+  status.textContent = '';
+
+  try {
+    const d = new Date(date + 'T12:00:00Z');
+    const dateMDY = `${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')}/${d.getUTCFullYear()}`;
+
+    // Step 1 — fetch schedule
+    status.textContent = '⟳ Fetching schedule…';
+    const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${date}&hydrate=lineups,probablePitcher(note)`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error(`MLB API ${res.status}`);
+    const data = await res.json();
+    const dates = data.dates || [];
+    if(!dates.length || !dates[0].games?.length) throw new Error(`No games found for ${date}`);
+    const games = dates[0].games.map(parseMLBGame);
+
+    // Step 2 — FanGraphs lineups
+    status.textContent = '⟳ Fetching FanGraphs lineups…';
+    try {
+      const fgPath = `live-all?gamedate=${date}`;
+      const isLocalServer = ['8080','8000','3000'].includes(window.location.port) || window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+      const fgUrl = (isLocalServer || RENDER_URL !== 'YOUR_RENDER_URL_HERE')
+        ? `${PROXY_BASE}/fg/${fgPath}`
+        : `https://www.fangraphs.com/api/scores/${fgPath}`;
+      const fgRes = await fetch(fgUrl);
+      const fgText = await fgRes.text();
+      if(fgText.trim().startsWith('[')){
+        const fgData = JSON.parse(fgText);
+        applyFanGraphsLineups(games, fgData);
+      }
+    } catch(e){ console.warn('Global FanGraphs fetch failed:', e.message); }
+
+    // Apply any manual SP/lineup overrides from S.games
+    for(const og of games){
+      const sg = S.games.find(g => g.away === og.away && g.home === og.home);
+      if(!sg) continue;
+      if(sg.awaySpManual){ og.awaySpName = sg.awaySpName; og.awaySpWar = sg.awaySpWar; og.awaySpOrig = sg.awaySpOrig; og.awaySpManual = true; }
+      if(sg.homeSpManual){ og.homeSpName = sg.homeSpName; og.homeSpWar = sg.homeSpWar; og.homeSpOrig = sg.homeSpOrig; og.homeSpManual = true; }
+      if(sg.lineupOverrides) og.lineupOverrides = sg.lineupOverrides;
+    }
+
+    // Step 3 — BetOnline odds
+    status.textContent = '⟳ Fetching BetOnline odds…';
+    const oddsUrl = `${PROXY_BASE}/odds-api/sports/baseball_mlb/odds/?regions=us&markets=h2h&oddsFormat=american&bookmakers=betonlineag`;
+    const oddsRes = await fetch(oddsUrl);
+    if(!oddsRes.ok) throw new Error(`Odds API ${oddsRes.status}`);
+    const oddsData = await oddsRes.json();
+
+    function getETDate(utcStr){ const d2=new Date(utcStr); return new Date(d2.getTime()-4*60*60000).toISOString().slice(0,10); }
+    const dateEvents = oddsData.filter(e => getETDate(e.commence_time) === date);
+
+    for(const event of dateEvents){
+      const awAbr = NAME_TO_ABR[event.away_team] || event.away_team.split(' ').pop().slice(0,3).toUpperCase();
+      const hwAbr = NAME_TO_ABR[event.home_team] || event.home_team.split(' ').pop().slice(0,3).toUpperCase();
+      const game = games.find(g => g.away === awAbr && g.home === hwAbr);
+      if(!game) continue;
+      const bk = event.bookmakers.find(b => b.key === 'betonlineag');
+      if(!bk) continue;
+      const mkt = bk.markets.find(m => m.key === 'h2h');
+      if(!mkt) continue;
+      const ao = mkt.outcomes.find(o => o.name === event.away_team);
+      const ho = mkt.outcomes.find(o => o.name === event.home_team);
+      if(ao && ho){ game.awayBO = ao.price; game.homeBO = ho.price; }
+    }
+
+    // Step 4 — run model, confirmed lineups only, any positive BO edge
+    status.textContent = '⟳ Calculating edges…';
+    const now = new Date().toLocaleString('en-US',{month:'2-digit',day:'2-digit',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true});
+    const newPicks = [];
+
+    for(const g of games){
+      // CRITICAL: only confirmed lineups
+      if(!g.hasLineup) continue;
+
+      const r = modelCalc(g);
+      if(!r) continue;
+
+      if(g.awayBO != null){
+        const edge = (r.awWP||0) - impl(g.awayBO);
+        if(edge > 0){
+          newPicks.push({
+            id: Date.now() + Math.random(),
+            dt: dateMDY, gt: r.gameTime||'', tp: now,
+            tx: g.away, opp: g.home, ha: '@',
+            od: g.awayBO, xwp: +((r.awWP||0)*100).toFixed(2), ed: +(edge*100).toFixed(2),
+            un: 1, rs: 'Pending', uw: calcWon(g.awayBO, 1, 'Pending'), ku: 0, kuw: 0
+          });
+        }
+      }
+      if(g.homeBO != null){
+        const edge = (r.hwWP||0) - impl(g.homeBO);
+        if(edge > 0){
+          newPicks.push({
+            id: Date.now() + Math.random(),
+            dt: dateMDY, gt: r.gameTime||'', tp: now,
+            tx: g.home, opp: g.away, ha: 'vs',
+            od: g.homeBO, xwp: +((r.hwWP||0)*100).toFixed(2), ed: +(edge*100).toFixed(2),
+            un: 1, rs: 'Pending', uw: calcWon(g.homeBO, 1, 'Pending'), ku: 0, kuw: 0
+          });
+        }
+      }
+    }
+
+    // Step 5 — deduplicate
+    const filtered = newPicks.filter(p => !S.global.find(o => o.tx === p.tx && o.dt === p.dt));
+
+    if(!newPicks.length){
+      status.textContent = `No confirmed-lineup games with BO odds found for ${date}`;
+      toast('No global picks found'); return;
+    }
+    if(!filtered.length){
+      status.textContent = `All picks for ${dateMDY} already logged`;
+      toast('All global picks already logged'); return;
+    }
+
+    // Step 6 — save
+    filtered.forEach(p => {
+      if(!S.global.find(o => o.tx === p.tx && o.dt === p.dt)){
+        S.global.push(p);
+        saveGlobalToFirebase(p);
+      }
+    });
+    localStorage.setItem('mlb26v3', JSON.stringify(S));
+    rGlobal();
+    const allTeams = filtered.map(p => p.tx);
+    logActivity(`Global (${dateMDY}): ${filtered.map(p=>`${p.tx} ${p.od>0?'+':''}${p.od}`).join(', ')}`, allTeams, 'bets');
+    status.textContent = `✓ Logged ${filtered.length} picks for ${dateMDY}`;
+    toast(`${filtered.length} global picks logged ✓`);
+
+  } catch(e){
+    console.error('Global error:', e);
+    status.textContent = '✗ ' + e.message;
+    toast('Global failed: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    updateGlobalBtn();
+  }
+}
+
+function rGlobal(){
+  const b = document.getElementById('glb');
+  document.getElementById('gl-ct').textContent = S.global.length + ' bet' + (S.global.length !== 1 ? 's' : '');
+  if(!S.global.length){ b.innerHTML = '<tr><td colspan="15" class="nd">No global picks yet.</td></tr>'; return; }
+
+  let fwdRun = 0;
+  const runningTotals = S.global.map(p => {
+    if(p.rs !== 'Pending') fwdRun += p.uw;
+    return { run: fwdRun };
+  });
+
+  b.innerHTML = [...S.global].map((p,i) => ({p, rt:runningTotals[i]})).reverse().map(({p,rt},i) => {
+    const run = rt.run;
+    const rc = run >= 0 ? 'var(--green)' : 'var(--red)';
+    const wonStr = p.rs === 'Pending' ? '—' : (p.uw >= 0 ? '+' : '') + p.uw.toFixed(2) + 'u';
+    const runStr = p.rs === 'Pending' ? '—' : (run >= 0 ? '+' : '') + run.toFixed(2) + 'u';
+    const wc = p.uw > 0 ? 'var(--green)' : p.uw < 0 ? 'var(--red)' : 'var(--muted)';
+    return `<tr>
+      <td style="color:var(--muted);text-align:center">${S.global.length - i}</td>
+      <td style="text-align:center"><button class="btn bg" style="padding:2px 6px;font-size:9px;" onclick="event.stopPropagation();openEditPick(${p.id},'global')">✎</button></td>
+      <td style="color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${p.tp||'—'}</td>
+      <td style="white-space:nowrap;font-size:11px">${fmtDtFull(p.dt)}</td>
+      <td style="font-weight:600;white-space:nowrap"><img src="${teamLogo(p.tx)}" width="16" height="16" style="object-fit:contain;vertical-align:middle;margin-right:4px;" onerror="this.style.display='none'" />${p.tx||'—'}</td>
+      <td style="color:var(--muted)">${p.ha||'vs'} ${p.opp||'—'}</td>
+      <td style="color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${p.gt||'—'}</td>
+      <td style="text-align:right">${p.od>0?'+':''}${p.od}</td>
+      <td style="color:var(--muted);text-align:right">${p.xwp?p.xwp.toFixed(1)+'%':'—'}</td>
+      <td style="color:${p.ed>0?'var(--green)':p.ed<0?'var(--red)':'var(--muted)'};text-align:right">${p.ed>=0?'+':''}${p.ed.toFixed(1)}%</td>
+      <td style="text-align:right">${p.un}u</td>
+      <td onclick="event.stopPropagation()"><select style="background:transparent;border:1px solid var(--border);color:${p.rs==='Win'?'var(--green)':p.rs==='Loss'?'var(--red)':'var(--accent)'};font-size:10px;padding:2px 4px;" onchange="updGlobal(${p.id},this.value)">
+        <option value="Pending" ${p.rs==='Pending'?'selected':''}>Pending</option>
+        <option value="Win" ${p.rs==='Win'?'selected':''}>Win</option>
+        <option value="Loss" ${p.rs==='Loss'?'selected':''}>Loss</option>
+      </select></td>
+      <td style="color:${wc};text-align:right">${wonStr}</td>
+      <td style="color:${rc};font-weight:600;text-align:right">${runStr}</td>
+      <td><button class="btn bd" style="padding:3px 7px;font-size:9px" onclick="delGlobal(${p.id})">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function delGlobal(id){
+  const dp = S.global.find(p => p.id === id);
+  if(dp) logActivity(`Global deleted: ${dp.tx} ${dp.od>0?'+':''}${dp.od} vs ${dp.opp} (${fmtDt(dp.dt)})`, dp.tx, 'bets');
+  S.global = S.global.filter(p => p.id !== id);
+  deleteGlobalFromFirebase(id);
+  localStorage.setItem('mlb26v3', JSON.stringify(S));
+  rGlobal();
+}
+
+function updGlobal(id, rs){
+  const p = S.global.find(p => p.id === id);
+  if(!p) return;
+  p.rs = rs;
+  p.uw = calcWon(p.od, p.un, rs);
+  saveGlobalToFirebase(p);
+  logActivity(`Pick result: ${p.tx} ${p.od>0?'+':''}${p.od} vs ${p.opp} → ${rs} (${fmtDt(p.dt)})`, p.tx);
+  localStorage.setItem('mlb26v3', JSON.stringify(S));
+  rGlobal();
+}
+
+async function saveGlobalToFirebase(pick){
+  if(!_currentUser) return;
+  try { await db.collection('global_picks').doc(String(pick.id)).set({...pick, savedBy: _currentUser.uid}); }
+  catch(e){ console.error('Global save error:', e); }
+}
+
+async function deleteGlobalFromFirebase(id){
+  try { await db.collection('global_picks').doc(String(id)).delete(); } catch(e){}
+}
+
 function rPerf(){
   const res=S.picks.filter(p=>p.rs!=='Pending');
   const wins=res.filter(p=>p.rs==='Win').length;
@@ -3704,6 +3986,7 @@ function showPanel(name,btn){
   if(name==='games')rGames();
   if(name==='kelly-tracker'){renderKellyTracker();}
   if(name==='overnights'){initOvernightDate();rOvernights();}
+  if(name==='global'){initGlobalDate();rGlobal();}
   if(name==='perf')rCharts();
   if(name==='teams'){initTeamBtns();renderTeam(currentTeam);}
   if(name==='proj-h')rProjH();
@@ -4640,9 +4923,12 @@ function renderStandings(){
 // ═══════════════════════════════════════════════
 
 let _editPickIsOvernight = false;
-function openEditPick(id, isOvernight){
-  _editPickIsOvernight = !!isOvernight;
-  const p = isOvernight ? S.overnights.find(p => p.id === id) : S.picks.find(p => p.id === id);
+let _editPickIsGlobal = false;
+function openEditPick(id, type){
+  _editPickIsOvernight = type === true || type === 'overnight';
+  _editPickIsGlobal = type === 'global';
+  const arr = _editPickIsGlobal ? S.global : _editPickIsOvernight ? S.overnights : S.picks;
+  const p = arr.find(p => p.id === id);
   if(!p) return;
   _editPickId = id;
   document.getElementById('ep-tp').value  = p.tp || '';
@@ -4675,9 +4961,8 @@ function epAutoCalc(){
 }
 
 function saveEditPick(){
-  const p = _editPickIsOvernight
-    ? S.overnights.find(p => p.id === _editPickId)
-    : S.picks.find(p => p.id === _editPickId);
+  const arr = _editPickIsGlobal ? S.global : _editPickIsOvernight ? S.overnights : S.picks;
+  const p = arr.find(p => p.id === _editPickId);
   if(!p) return;
   const _oldOd = p.od; // capture before mutation for activity log
   p.tp  = document.getElementById('ep-tp').value.trim() || p.tp;
@@ -4696,16 +4981,14 @@ function saveEditPick(){
   p.ku  = calcKellyUnits(p.od, p.ed);
   p.uw  = calcWon(p.od, p.un, p.rs);
   p.kuw = calcWon(p.od, p.ku||0, p.rs);
-  if(_editPickIsOvernight){
-    saveOvernightToFirebase(p);
-  } else {
-    savePickToFirebase(p);
-  }
+  if(_editPickIsGlobal){ saveGlobalToFirebase(p); }
+  else if(_editPickIsOvernight){ saveOvernightToFirebase(p); }
+  else { savePickToFirebase(p); }
   const _odStr = o => o>0?`+${o}`:String(o);
   logActivity(`Pick edited: ${p.tx} ${_odStr(_oldOd)} → ${_odStr(p.od)} (${fmtDt(p.dt)})`, p.tx);
   localStorage.setItem('mlb26v3',JSON.stringify(S));
   closeEditPick();
-  if(_editPickIsOvernight){ rOvernights(); } else { rPicks(); rPerf(); }
+  if(_editPickIsGlobal){ rGlobal(); } else if(_editPickIsOvernight){ rOvernights(); } else { rPicks(); rPerf(); }
   toast('Pick updated!');
 }
 
@@ -4859,7 +5142,12 @@ function setupRealtimeListeners(){
     console.log('Picks synced:', S.picks.length);
   }, e => console.error('Picks listener error:', e));
 
-  // ── Overnights: real-time listener ──
+  // ── Global picks: real-time listener ──
+  db.collection('global_picks').orderBy('id').onSnapshot(snap => {
+    S.global = snap.docs.map(d => d.data());
+    rGlobal();
+    console.log('Global synced:', S.global.length);
+  }, e => console.error('Global listener error:', e));
   db.collection('overnight_picks').orderBy('id').onSnapshot(snap => {
     S.overnights = snap.docs.map(d => d.data());
     rOvernights();
