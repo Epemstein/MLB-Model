@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MLB ALGO 2026</title>
+<title>eMLB ALGO 2026</title>
 
 <style>
 
@@ -621,7 +621,6 @@ canvas { width: 100% !important; }
 input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
 input[type=number] { -moz-appearance:textfield; }
-#odds-summary-table { border-collapse:separate !important; border-spacing:0 !important; }
 #odds-summary-table td, #odds-summary-table th { padding:3px 5px; }
 .odds-team-cell:hover { filter: brightness(0.92); transition: filter .1s; }
 
@@ -3180,7 +3179,8 @@ function updGStats(calcs){
     const [awNvStyle, awBoStyle, awNvStr, awBoStr] = oddsCell(g.awayOdds, g.awayBO, awBg);
     const [hwNvStyle, hwBoStyle, hwNvStr, hwBoStr] = oddsCell(g.homeOdds, g.homeBO, hwBg);
 
-    rows.push(`<tr style="border-top:8px solid #e8eaed;">
+    if(rows.length) rows.push(`<tr><td colspan='8' style='padding:3px 0;background:#f0f2f5;font-size:1px;line-height:1px;'>&nbsp;</td></tr>`);
+  rows.push(`<tr>
       <td rowspan="2" style="${f}color:var(--muted);font-size:11px;vertical-align:middle;border-right:1px solid var(--border);white-space:nowrap;background:#fff;">
         <div style="font-weight:600;color:var(--text)">${game}${lineupDot}</div>
         <div style="font-size:10px;margin-top:2px;">${r.gameTime||''}</div>
