@@ -469,8 +469,11 @@ def run():
             aw_n = ev['away_team']; hw_n = ev['home_team']
             aw_a = NAME_TO_ABR.get(aw_n, aw_n.split()[-1][:3].upper())
             hw_a = NAME_TO_ABR.get(hw_n, hw_n.split()[-1][:3].upper())
+            print(f'Odds event: {aw_n}({aw_a}) @ {hw_n}({hw_a})')
             gm = next((x for x in games if x['away']==aw_a and x['home']==hw_a), None)
-            if not gm: continue
+            if not gm:
+                print(f'  → NO GAME MATCH for {aw_a} @ {hw_a}')
+                continue
             for bk in ev['bookmakers']:
                 mkt = next((m for m in bk['markets'] if m['key']=='h2h'), None)
                 if not mkt: continue
@@ -501,6 +504,7 @@ def run():
         gm['hw_wp'] = round(hw_wp*100, 2)
         gm['aw_mdl'] = p_to_american(aw_wp)
         gm['hw_mdl'] = p_to_american(hw_wp)
+        print(f'{aw}@{hw} | lineup={gm["has_lineup"]} | {aw}_wp={aw_wp*100:.1f}% {hw}_wp={hw_wp*100:.1f}% | aw_odds={gm["aw_odds"]} hw_odds={gm["hw_odds"]} | aw_edge={round((aw_wp-impl(gm["aw_odds"]))*100,1) if gm["aw_odds"] else "—"}% hw_edge={round((hw_wp-impl(gm["hw_odds"]))*100,1) if gm["hw_odds"] else "—"}%')
 
         # Best odds (higher American = better for bettor)
         def best(nv, bo):
