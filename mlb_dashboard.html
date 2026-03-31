@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>bMLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -2449,6 +2449,7 @@ Logged by ${user}`;
 }
 
 function addPick(){
+  if(!_brLoaded){ toast('Bankroll loading — try again in a moment', 'err'); return; }
   const dt  = document.getElementById('p-dt').value;
   const gt  = document.getElementById('p-gt').value.trim();
   const tx  = document.getElementById('p-tx').value.trim();
@@ -3572,6 +3573,7 @@ function goToday(){
 }
 
 function logTeam(el){
+  if(!_brLoaded){ toast('Bankroll loading — try again in a moment', 'err'); return; }
   const gid      = el.dataset.gid;
   const team     = el.dataset.team;
   const opp      = el.dataset.opp;
@@ -4607,6 +4609,7 @@ let _standingsFetchedAt = 0;
 let _standingsLeague = 'AL';
 let _lastAutoUpdateMs = 0;
 let _lastManualFetchMs = 0;
+let _brLoaded = false;
 
 function updateFetchAgo(){
   const agoEl = document.getElementById('hdr-fetch-ago');
@@ -5381,7 +5384,7 @@ function setupRealtimeListeners(){
 
   // ── Bankroll: real-time listener ──
   db.collection('bankroll').doc('settings').onSnapshot(snap => {
-    if(snap.exists){ S.br = {...S.br, ...snap.data()}; loadBRUI(); rPerf(); }
+    if(snap.exists){ S.br = {...S.br, ...snap.data()}; loadBRUI(); rPerf(); _brLoaded = true; }
   }, e => console.error('Bankroll listener error:', e));
 }
 
@@ -5410,7 +5413,7 @@ async function loadFromFirebase(){
       if(ov.spOverrides) S.spOverrides = ov.spOverrides;
       if(ov.ipOverrides) S.ipOverrides = ov.ipOverrides;
     }
-    if(brSnap.exists) S.br = {...S.br, ...brSnap.data()};
+    if(brSnap.exists){ S.br = {...S.br, ...brSnap.data()}; _brLoaded = true; }
 
     // Load daily BR snapshot for today
     if(!S._dailyBR) S._dailyBR = {};
