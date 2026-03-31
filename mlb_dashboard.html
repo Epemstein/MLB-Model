@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>eMLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -178,6 +178,14 @@ main { padding: 16px 20px; max-width: 1400px; margin: 0 auto; }
 
 /* team header rows — colored band with logo watermark */
 #odds-summary-table thead th { position:sticky;top:0;z-index:2;background:var(--surface);box-shadow:0 1px 0 var(--border); }
+#results-grid-table { border-collapse:collapse;font-size:10px;font-family:Calibri,sans-serif;white-space:nowrap; }
+#results-grid-table th, #results-grid-table td { padding:3px 6px;border:1px solid var(--border);text-align:center; }
+#results-grid-table .rg-team { position:sticky;left:0;z-index:1;background:var(--surface);font-weight:700;text-align:left;min-width:44px;border-right:2px solid var(--border2); }
+#results-grid-table thead th { position:sticky;top:0;z-index:2;background:var(--surface);font-weight:600;color:var(--muted); }
+#results-grid-table thead th.rg-team { z-index:3; }
+#results-grid-table .rg-win { color:#2e7d32;font-weight:700; }
+#results-grid-table .rg-loss { color:#c62828; }
+#results-grid-table .rg-today { background:rgba(0,150,240,.08); }
 .gc-teams { display: flex; }
 .gc-team-hdr {
   flex: 1;
@@ -1076,6 +1084,19 @@ input[type=number] { -moz-appearance:textfield; }
     <span id="standings-status" style="font-size:11px;color:var(--muted);margin-left:8px;"></span>
   </div>
   <div id="standings-body" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;"></div>
+
+  <!-- Results Grid -->
+  <div class="card" style="margin-top:18px;">
+    <div class="ct">Season Results Grid
+      <span style="margin-left:auto;display:flex;align-items:center;gap:10px;">
+        <span id="results-grid-status" style="font-family:var(--mono);font-size:9px;color:var(--muted);"></span>
+        <button class="btn bg" onclick="fetchResultsGrid(true)" style="font-size:10px;padding:3px 8px;">↻ Refresh</button>
+      </span>
+    </div>
+    <div style="overflow-x:auto;max-height:600px;overflow-y:auto;">
+      <div id="results-grid-body" style="font-size:10px;color:var(--muted);padding:12px;">Loading…</div>
+    </div>
+  </div>
 </div>
 
 <!-- ══ ACTIVITY LOG ══ -->
@@ -3998,6 +4019,9 @@ function showPanel(name,btn){
     const stale = !_standingsData || !_standingsData.length || (Date.now() - (_standingsFetchedAt||0)) > 4*60*60*1000;
     if(stale) fetchStandings();
     else renderStandings();
+    // Load results grid — from cache if fresh, otherwise fetch
+    if(loadResultsGridFromCache()) renderResultsGrid();
+    else fetchResultsGrid();
   }
   if(name==='activity'){loadActivityLog();}
 }
@@ -4579,6 +4603,135 @@ function clearProjSnapshot(tab){
 let _standingsData = null;
 let _standingsFetchedAt = 0;
 let _standingsLeague = 'AL';
+
+// ── Results Grid ──────────────────────────────────────────────────────────
+let _resultsGrid = {};       // { 'NYY': { '2026-03-25': 'W vs BOS', ... }, ... }
+let _resultsGridFetchedAt = 0;
+const RESULTS_GRID_SEASON_START = '2026-03-25';
+
+async function fetchResultsGrid(force){
+  const stale = force || !Object.keys(_resultsGrid).length || (Date.now() - _resultsGridFetchedAt) > 4*60*60*1000;
+  if(!stale){ renderResultsGrid(); return; }
+
+  const status = document.getElementById('results-grid-status');
+  if(status) status.textContent = '⟳ Fetching…';
+
+  try {
+    // Generate date range: opening day → today + 3
+    const dates = [];
+    const start = new Date(RESULTS_GRID_SEASON_START + 'T12:00:00Z');
+    const end = new Date(); end.setUTCDate(end.getUTCDate() + 3);
+    for(let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)){
+      dates.push(d.toISOString().slice(0,10));
+    }
+
+    // Fetch schedule for each date that has passed (don't need future results)
+    const today = new Date().toISOString().slice(0,10);
+    const pastDates = dates.filter(d => d <= today);
+
+    // Batch fetch — MLB schedule API supports date ranges
+    const startStr = RESULTS_GRID_SEASON_START;
+    const endStr = today;
+    const url = `${PROXY_BASE}/mlb-api/schedule?sportId=1&startDate=${startStr}&endDate=${endStr}&hydrate=decisions,linescore&gameType=R`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error(`MLB API ${res.status}`);
+    const data = await res.json();
+
+    // Build results map
+    const grid = {};
+    for(const t of TEAMS_30) grid[t] = {};
+
+    for(const dateObj of (data.dates || [])){
+      const dateStr = dateObj.date;
+      for(const game of (dateObj.games || [])){
+        if(game.status?.abstractGameState !== 'Final') continue;
+        const awAbr = MLB_ID_TO_ABR[game.teams?.away?.team?.id] || fgAbrToOurs(game.teams?.away?.team?.abbreviation || '');
+        const hwAbr = MLB_ID_TO_ABR[game.teams?.home?.team?.id] || fgAbrToOurs(game.teams?.home?.team?.abbreviation || '');
+        if(!awAbr || !hwAbr) continue;
+        const awScore = game.teams?.away?.score ?? 0;
+        const hwScore = game.teams?.home?.score ?? 0;
+        const awWin = awScore > hwScore;
+        if(grid[awAbr]) grid[awAbr][dateStr] = `${awWin?'W':'L'} ${awAbr === awAbr ? 'vs' : '@'} ${hwAbr}`;
+        if(grid[hwAbr]) grid[hwAbr][dateStr] = `${!awWin?'W':'L'} vs ${awAbr}`;
+      }
+    }
+
+    _resultsGrid = grid;
+    _resultsGridFetchedAt = Date.now();
+
+    // Cache in localStorage
+    try {
+      localStorage.setItem('mlb_results_grid', JSON.stringify(grid));
+      localStorage.setItem('mlb_results_grid_ts', String(_resultsGridFetchedAt));
+    } catch(e){}
+
+    if(status) status.textContent = 'Updated ' + new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    renderResultsGrid();
+  } catch(e){
+    console.error('Results grid fetch failed:', e);
+    if(status) status.textContent = 'Failed: ' + e.message;
+  }
+}
+
+function loadResultsGridFromCache(){
+  try {
+    const ts = +localStorage.getItem('mlb_results_grid_ts') || 0;
+    const cached = localStorage.getItem('mlb_results_grid');
+    if(cached && (Date.now() - ts) < 4*60*60*1000){
+      _resultsGrid = JSON.parse(cached);
+      _resultsGridFetchedAt = ts;
+      return true;
+    }
+  } catch(e){}
+  return false;
+}
+
+function renderResultsGrid(){
+  const container = document.getElementById('results-grid-body');
+  if(!container) return;
+
+  // Generate date columns: opening day → today + 3
+  const dates = [];
+  const start = new Date(RESULTS_GRID_SEASON_START + 'T12:00:00Z');
+  const end = new Date(); end.setUTCDate(end.getUTCDate() + 3);
+  for(let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)){
+    dates.push(d.toISOString().slice(0,10));
+  }
+  const today = new Date().toISOString().slice(0,10);
+
+  // Header row
+  const headerCols = dates.map(d => {
+    const isToday = d === today;
+    const [,m,day] = d.split('-');
+    return `<th class="${isToday?'rg-today':''}" title="${d}">${m}/${day}</th>`;
+  }).join('');
+
+  // Team rows — sorted by division order
+  const teamRows = TEAMS_30.map(abr => {
+    const info = TEAM_INFO[abr] || {};
+    const teamData = _resultsGrid[abr] || {};
+    const cells = dates.map(d => {
+      const val = teamData[d];
+      if(!val) return `<td style="color:#ddd;">·</td>`;
+      const isWin = val.startsWith('W');
+      const isToday = d === today;
+      const opp = val.slice(4); // strip "W vs " or "L vs "
+      return `<td class="${isWin?'rg-win':'rg-loss'}${isToday?' rg-today':''}" title="${d}: ${val}">${isWin?'W':'L'}<span style="font-size:8px;color:var(--muted);margin-left:2px;">${opp}</span></td>`;
+    }).join('');
+    return `<tr>
+      <td class="rg-team"><img src="${teamLogo(abr)}" width="14" height="14" style="object-fit:contain;vertical-align:middle;margin-right:4px;" onerror="this.style.display='none'" />${abr}</td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `<table id="results-grid-table">
+    <thead><tr>
+      <th class="rg-team">Team</th>
+      ${headerCols}
+    </tr></thead>
+    <tbody>${teamRows}</tbody>
+  </table>`;
+}
 
 function showLeague(lg, btn){
   _standingsLeague = lg;
