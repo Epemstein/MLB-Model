@@ -2458,7 +2458,7 @@ function rPicks(){
     const wc = p.uw>0?'var(--green)':p.uw<0?'var(--red)':'var(--muted)';
     return `<tr style="cursor:pointer;" onclick="openGameModal(${p.id})" title="Click to view game details">
       <td style="color:var(--muted);text-align:center">${S.picks.length - i}</td>
-      <td style="text-align:center"><button class="btn bg" style="padding:2px 6px;font-size:9px;" onclick="event.stopPropagation();openEditPick(${p.id})">✎</button></td>
+      <td style="text-align:center"><button class="btn bg" style="padding:2px 6px;font-size:9px;" onclick="event.stopPropagation();openEditPick(${p.id},true)">✎</button></td>
       <td style="color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${p.tp||'—'}</td>
       <td style="white-space:nowrap;font-size:11px">${p.dt}</td>
       <td style="font-weight:600;white-space:nowrap"><img src="${teamLogo(p.tx)}" width="16" height="16" style="object-fit:contain;vertical-align:middle;margin-right:4px;" onerror="this.style.display='none'" />${p.tx||'—'}</td>
@@ -2745,9 +2745,11 @@ function delOvernight(id){
 function updOvernight(id, rs){
   const p = S.overnights.find(p => p.id === id);
   if(!p) return;
+  const oldRs = p.rs;
   p.rs = rs;
   p.uw = calcWon(p.od, p.un, rs);
   saveOvernightToFirebase(p);
+  logActivity(`Pick result: ${p.tx} ${p.od>0?'+':''}${p.od} vs ${p.opp} → ${rs} (${fmtDt(p.dt)})`, p.tx);
   localStorage.setItem('mlb26v3', JSON.stringify(S));
   rOvernights();
 }
@@ -4605,8 +4607,10 @@ function renderStandings(){
 // EDIT PICK MODAL
 // ═══════════════════════════════════════════════
 
-function openEditPick(id){
-  const p = S.picks.find(p => p.id === id);
+let _editPickIsOvernight = false;
+function openEditPick(id, isOvernight){
+  _editPickIsOvernight = !!isOvernight;
+  const p = isOvernight ? S.overnights.find(p => p.id === id) : S.picks.find(p => p.id === id);
   if(!p) return;
   _editPickId = id;
   document.getElementById('ep-tp').value  = p.tp || '';
@@ -4656,12 +4660,15 @@ function saveEditPick(){
   p.ku  = calcKellyUnits(p.od, p.ed);
   p.uw  = calcWon(p.od, p.un, p.rs);
   p.kuw = calcWon(p.od, p.ku||0, p.rs);
-  savePickToFirebase(p);
+  if(_editPickIsOvernight){
+    saveOvernightToFirebase(p);
+  } else {
+    savePickToFirebase(p);
+  }
   logActivity(`Pick edited: ${p.tx} ${p.od>0?'+':''}${p.od} vs ${p.opp} → ${p.rs} (${fmtDt(p.dt)})`, p.tx);
   localStorage.setItem('mlb26v3',JSON.stringify(S));
   closeEditPick();
-  rPicks();
-  rPerf();
+  if(_editPickIsOvernight){ rOvernights(); } else { rPicks(); rPerf(); }
   toast('Pick updated!');
 }
 
