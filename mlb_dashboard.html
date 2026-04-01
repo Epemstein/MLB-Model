@@ -2915,6 +2915,7 @@ async function deleteOvernightFromFirebase(id){
 
 async function fetchCLV(){
   const status = document.getElementById('clv-status');
+  if(!S.apiKey){ toast('Enter your Odds API key in Tools first', 'err'); return; }
   if(!S.overnights.length){ toast('No overnight picks to fetch CLV for', 'err'); return; }
 
   // Only fetch picks that don't already have a closing line and have a game time
@@ -2946,7 +2947,7 @@ async function fetchCLV(){
       try {
         // Use end-of-day snapshot to capture all games
         const dateStr = ymd + 'T23:59:00Z';
-        const evRes = await fetch(`${PROXY_BASE}/odds-historical/sports/baseball_mlb/events?apiKey=${ODDS_API_KEY}&date=${encodeURIComponent(dateStr)}`);
+        const evRes = await fetch(`${PROXY_BASE}/odds-historical/sports/baseball_mlb/events?apiKey=${S.apiKey}&date=${encodeURIComponent(dateStr)}`);
         if(evRes.ok){
           const evData = await evRes.json();
           const events = evData.data || (Array.isArray(evData) ? evData : []);
@@ -2986,7 +2987,7 @@ async function fetchCLV(){
 
       // Fetch from historical odds API
       try {
-        const oddsUrl = `${PROXY_BASE}/odds-historical/sports/baseball_mlb/events/${ev.id}/odds?apiKey=${ODDS_API_KEY}&date=${encodeURIComponent(closeTime)}&regions=us&markets=h2h&oddsFormat=american&bookmakers=betonlineag`;
+        const oddsUrl = `${PROXY_BASE}/odds-historical/sports/baseball_mlb/events/${ev.id}/odds?apiKey=${S.apiKey}&date=${encodeURIComponent(closeTime)}&regions=us&markets=h2h&oddsFormat=american&bookmakers=betonlineag`;
         const oddsRes = await fetch(oddsUrl);
         if(!oddsRes.ok){ failed++; continue; }
         const oddsData = await oddsRes.json();
