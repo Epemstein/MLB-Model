@@ -12,10 +12,11 @@ IS_CLOUD = os.environ.get('RENDER', '') != ''  # Render sets this env var
 ODDS_API_KEY = '16381a969b24dad9592530007f8b51f9'
 
 PROXY_RULES = {
-    '/fg/':       'https://www.fangraphs.com/api/scores/',
-    '/fg-proj/':  'https://www.fangraphs.com/api/projections',
-    '/mlb-api/':  'https://statsapi.mlb.com/api/v1/',
-    '/odds-api/': 'https://api.the-odds-api.com/v4/',
+    '/fg/':               'https://www.fangraphs.com/api/scores/',
+    '/fg-proj/':          'https://www.fangraphs.com/api/projections',
+    '/mlb-api/':          'https://statsapi.mlb.com/api/v1/',
+    '/odds-api/':         'https://api.the-odds-api.com/v4/',
+    '/odds-historical/':  'https://api.the-odds-api.com/v4/historical/',
 }
 
 FG_HEADERS = {
