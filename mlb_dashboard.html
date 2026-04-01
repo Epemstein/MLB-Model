@@ -4121,6 +4121,8 @@ function updateActualOverride(){
     note.textContent = (diff >= 0 ? '+' : '') + '$' + Math.round(diff).toLocaleString() + ' vs rec';
     note.style.color = diff >= 0 ? 'var(--green)' : 'var(--red)';
   }
+}
+
 function updateKellyRec(){
   // Update Kelly $ recommendation in log pick form
   const od = parseFloat(document.getElementById('p-od')?.value);
