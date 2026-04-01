@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>sMLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -1131,6 +1131,7 @@ input[type=number] { -moz-appearance:textfield; }
       <button id="global-btn" onclick="runGlobal()" class="btn" style="padding:8px 18px;font-size:13px;font-weight:600;background:linear-gradient(to right,#e8f3ff,#c5dff8);color:#1a3a5c;border:1px solid #a8c8ee;border-radius:5px;box-shadow:3px 3px 8px rgba(0,0,0,.15);cursor:pointer;">
         Global for —
       </button>
+      <button onclick="autoFillGlobalResults()" class="btn bg" style="padding:8px 14px;font-size:12px;font-weight:600;border-radius:5px;cursor:pointer;" title="Fill W/L from results grid">⚡ Auto-Fill Results</button>
       <div style="font-size:11px;color:var(--muted);">Logs all confirmed-lineup games with positive BO edge at 1u. Confirmed lineups only.</div>
       <span id="global-status" style="font-size:11px;font-family:var(--mono);color:var(--muted);"></span>
     </div>
@@ -2949,24 +2950,26 @@ async function runGlobal(){
       if(g.awayBO != null){
         const edge = (r.awWP||0) - impl(g.awayBO);
         if(edge > 0){
+          const un = g.awayBO < 0 ? +(Math.abs(g.awayBO)/100).toFixed(2) : 1;
           newPicks.push({
             id: Date.now() + Math.random(),
             dt: dateMDY, gt: r.gameTime||'', tp: now,
             tx: g.away, opp: g.home, ha: '@',
             od: g.awayBO, xwp: +((r.awWP||0)*100).toFixed(2), ed: +(edge*100).toFixed(2),
-            un: 1, rs: 'Pending', uw: calcWon(g.awayBO, 1, 'Pending'), ku: 0, kuw: 0
+            un, rs: 'Pending', uw: calcWon(g.awayBO, un, 'Pending'), ku: 0, kuw: 0
           });
         }
       }
       if(g.homeBO != null){
         const edge = (r.hwWP||0) - impl(g.homeBO);
         if(edge > 0){
+          const un = g.homeBO < 0 ? +(Math.abs(g.homeBO)/100).toFixed(2) : 1;
           newPicks.push({
             id: Date.now() + Math.random(),
             dt: dateMDY, gt: r.gameTime||'', tp: now,
             tx: g.home, opp: g.away, ha: 'vs',
             od: g.homeBO, xwp: +((r.hwWP||0)*100).toFixed(2), ed: +(edge*100).toFixed(2),
-            un: 1, rs: 'Pending', uw: calcWon(g.homeBO, 1, 'Pending'), ku: 0, kuw: 0
+            un, rs: 'Pending', uw: calcWon(g.homeBO, un, 'Pending'), ku: 0, kuw: 0
           });
         }
       }
@@ -3067,6 +3070,43 @@ function updGlobal(id, rs){
   logActivity(`Pick result: ${p.tx} ${p.od>0?'+':''}${p.od} vs ${p.opp} → ${rs} (${fmtDt(p.dt)})`, p.tx);
   localStorage.setItem('mlb26v3', JSON.stringify(S));
   rGlobal();
+}
+
+async function autoFillGlobalResults(){
+  if(!S.global.length){ toast('No global picks to fill', 'err'); return; }
+
+  // Make sure results grid is loaded
+  if(!Object.keys(_resultsGrid).length){
+    toast('Loading results grid…');
+    await fetchResultsGrid();
+  }
+  if(!Object.keys(_resultsGrid).length){ toast('Results grid unavailable', 'err'); return; }
+
+  let filled = 0;
+  let skipped = 0;
+
+  for(const p of S.global){
+    if(p.rs !== 'Pending') continue;
+    // Convert pick date MM/DD/YYYY → YYYY-MM-DD for results grid lookup
+    const ymd = p.dt && p.dt.includes('/') ? dateToYMD(p.dt) : p.dt;
+    const teamGrid = _resultsGrid[p.tx] || {};
+    const result = teamGrid[ymd];
+    if(!result){ skipped++; continue; }
+    const rs = result.startsWith('W') ? 'Win' : result.startsWith('L') ? 'Loss' : null;
+    if(!rs){ skipped++; continue; }
+    p.rs = rs;
+    p.uw = calcWon(p.od, p.un, rs);
+    saveGlobalToFirebase(p);
+    filled++;
+  }
+
+  if(filled){
+    localStorage.setItem('mlb26v3', JSON.stringify(S));
+    rGlobal();
+    toast(`✓ Filled ${filled} result${filled!==1?'s':''}`+(skipped?` (${skipped} still pending)`:''));
+  } else {
+    toast(skipped ? `No completed results found yet (${skipped} pending)` : 'Nothing to fill');
+  }
 }
 
 async function saveGlobalToFirebase(pick){
