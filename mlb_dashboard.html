@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>xMLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -899,6 +899,8 @@ input[type=number] { -moz-appearance:textfield; }
       <button id="overnight-btn" onclick="runOvernights()" class="btn" style="padding:8px 18px;font-size:13px;font-weight:600;background:linear-gradient(to right,#e8f3ff,#c5dff8);color:#1a3a5c;border:1px solid #a8c8ee;border-radius:5px;box-shadow:3px 3px 8px rgba(0,0,0,.15);cursor:pointer;">
         ⚡ Overnights for —
       </button>
+      <button onclick="fetchCLV()" class="btn bg" style="padding:8px 14px;font-size:12px;font-weight:600;border-radius:5px;cursor:pointer;" title="Fetch closing lines for all overnight picks">📈 Fetch CLV</button>
+      <span id="clv-status" style="font-size:11px;font-family:var(--mono);color:var(--muted);"></span>
       <div style="font-size:11px;color:var(--muted);">Fetches schedule + BetOnline odds for selected date, logs all games with ≥3% edge at 1u each.</div>
       <span id="overnight-status" style="font-size:11px;font-family:var(--mono);color:var(--muted);"></span>
     </div>
@@ -920,8 +922,9 @@ input[type=number] { -moz-appearance:textfield; }
       <th style="width:60px">Result</th>
       <th style="width:65px;text-align:right">Won</th>
       <th style="width:75px;text-align:right">Running</th>
+      <th style="width:60px;text-align:right" title="Closing Line Value">CLV</th>
       <th style="width:28px"></th>
-    </tr></thead><tbody id="onb"><tr><td colspan="15" class="nd">No overnight picks yet.</td></tr></tbody></table></div>
+    </tr></thead><tbody id="onb"><tr><td colspan="16" class="nd">No overnight picks yet.</td></tr></tbody></table></div>
   </div>
 </div>
 
@@ -2820,7 +2823,7 @@ async function runOvernights(){
 function rOvernights(){
   const b = document.getElementById('onb');
   document.getElementById('on-ct').textContent = S.overnights.length + ' bet' + (S.overnights.length !== 1 ? 's' : '');
-  if(!S.overnights.length){ b.innerHTML = '<tr><td colspan="15" class="nd">No overnight picks yet.</td></tr>'; return; }
+  if(!S.overnights.length){ b.innerHTML = '<tr><td colspan="16" class="nd">No overnight picks yet.</td></tr>'; return; }
 
   let fwdRun = 0;
   const runningTotals = S.overnights.map(p => {
@@ -2834,6 +2837,15 @@ function rOvernights(){
     const wonStr = p.rs === 'Pending' ? '—' : (p.uw >= 0 ? '+' : '') + p.uw.toFixed(2) + 'u';
     const runStr = p.rs === 'Pending' ? '—' : (run >= 0 ? '+' : '') + run.toFixed(2) + 'u';
     const wc = p.uw > 0 ? 'var(--green)' : p.uw < 0 ? 'var(--red)' : 'var(--muted)';
+
+    // CLV = impl(closing_BO) - impl(logged_odds) — positive = beat closing line
+    let clvStr = '—', clvColor = 'var(--muted)';
+    if(p._closingBO != null){
+      const clv = impl(p._closingBO) - impl(p.od);
+      clvStr = (clv >= 0 ? '+' : '') + (clv * 100).toFixed(1) + '%';
+      clvColor = clv > 0 ? 'var(--green)' : clv < 0 ? 'var(--red)' : 'var(--muted)';
+    }
+
     return `<tr style="cursor:default;">
       <td style="color:var(--muted);text-align:center">${S.overnights.length - i}</td>
       <td style="text-align:center"><button class="btn bg" style="padding:2px 6px;font-size:9px;" onclick="openEditOvernight(${p.id})">✎</button></td>
@@ -2853,6 +2865,7 @@ function rOvernights(){
       </select></td>
       <td style="color:${wc};text-align:right">${wonStr}</td>
       <td style="color:${rc};font-weight:600;text-align:right">${runStr}</td>
+      <td style="color:${clvColor};font-weight:600;text-align:right" title="${p._closingBO != null ? 'Closing BO: ' + (p._closingBO > 0 ? '+' : '') + p._closingBO : 'No closing line yet'}">${clvStr}</td>
       <td><button class="btn bd" style="padding:3px 7px;font-size:9px" onclick="delOvernight(${p.id})">✕</button></td>
     </tr>`;
   }).join('');
@@ -2894,6 +2907,120 @@ async function saveOvernightToFirebase(pick){
 
 async function deleteOvernightFromFirebase(id){
   try { await db.collection('overnight_picks').doc(String(id)).delete(); } catch(e){}
+}
+
+// ═══════════════════════════════════════════════
+// CLV — Closing Line Value for Overnights
+// ═══════════════════════════════════════════════
+
+async function fetchCLV(){
+  const status = document.getElementById('clv-status');
+  if(!S.overnights.length){ toast('No overnight picks to fetch CLV for', 'err'); return; }
+
+  // Only fetch picks that don't already have a closing line and have a game time
+  const needsCLV = S.overnights.filter(p => p._closingBO == null);
+  if(!needsCLV.length){ toast('All closing lines already fetched ✓'); return; }
+
+  if(status) status.textContent = '⟳ Fetching closing lines…';
+
+  let fetched = 0, skipped = 0, failed = 0;
+
+  // Group picks by date to minimize API calls
+  const byDate = {};
+  for(const p of needsCLV){
+    const ymd = p.dt && p.dt.includes('/') ? dateToYMD(p.dt) : p.dt;
+    if(!byDate[ymd]) byDate[ymd] = [];
+    byDate[ymd].push(p);
+  }
+
+  for(const [ymd, picks] of Object.entries(byDate)){
+    // Check Firestore cache first for this date
+    let eventMap = {}; // { 'WSN': {id, commence_time, away_team, home_team} }
+    try {
+      const cached = await db.collection('closing_lines').doc('events_' + ymd).get();
+      if(cached.exists) eventMap = cached.data();
+    } catch(e){}
+
+    // If no cached events, fetch from historical events endpoint
+    if(!Object.keys(eventMap).length){
+      try {
+        // Use end-of-day snapshot to capture all games
+        const dateStr = ymd + 'T23:59:00Z';
+        const evRes = await fetch(`${PROXY_BASE}/odds-historical/sports/baseball_mlb/events?apiKey=${ODDS_API_KEY}&date=${encodeURIComponent(dateStr)}`);
+        if(evRes.ok){
+          const evData = await evRes.json();
+          const events = evData.data || (Array.isArray(evData) ? evData : []);
+          for(const ev of events){
+            const awAbr = NAME_TO_ABR[ev.away_team] || ev.away_team.split(' ').pop().slice(0,3).toUpperCase();
+            const hwAbr = NAME_TO_ABR[ev.home_team] || ev.home_team.split(' ').pop().slice(0,3).toUpperCase();
+            eventMap[awAbr] = { id: ev.id, commence_time: ev.commence_time, away_team: ev.away_team, home_team: ev.home_team, is_away: true };
+            eventMap[hwAbr] = { id: ev.id, commence_time: ev.commence_time, away_team: ev.away_team, home_team: ev.home_team, is_away: false };
+          }
+          // Cache event map for this date
+          try { await db.collection('closing_lines').doc('events_' + ymd).set(eventMap); } catch(e){}
+        }
+      } catch(e){ console.warn('CLV events fetch failed:', e); }
+    }
+
+    // Now fetch closing odds per pick
+    for(const p of picks){
+      const ymd2 = p.dt && p.dt.includes('/') ? dateToYMD(p.dt) : p.dt;
+      const ev = eventMap[p.tx];
+      if(!ev){ skipped++; continue; }
+
+      // Closing line = snapshot just before commence_time
+      const closeTime = new Date(new Date(ev.commence_time).getTime() - 2*60*1000).toISOString(); // 2 min before
+
+      // Check Firestore cache for this specific game+team
+      const cacheKey = `${ymd2}_${p.tx}`;
+      try {
+        const cached = await db.collection('closing_lines').doc(cacheKey).get();
+        if(cached.exists){
+          const cl = cached.data();
+          p._closingBO = cl.odds;
+          await saveOvernightToFirebase(p);
+          fetched++;
+          continue;
+        }
+      } catch(e){}
+
+      // Fetch from historical odds API
+      try {
+        const oddsUrl = `${PROXY_BASE}/odds-historical/sports/baseball_mlb/events/${ev.id}/odds?apiKey=${ODDS_API_KEY}&date=${encodeURIComponent(closeTime)}&regions=us&markets=h2h&oddsFormat=american&bookmakers=betonlineag`;
+        const oddsRes = await fetch(oddsUrl);
+        if(!oddsRes.ok){ failed++; continue; }
+        const oddsData = await oddsRes.json();
+        // Historical event-odds endpoint: { data: { id, bookmakers, ... }, timestamp, ... }
+        const event = oddsData.data || (Array.isArray(oddsData) ? oddsData.find(e => e.id === ev.id) : oddsData);
+        if(!event){ failed++; continue; }
+        const bk = (event.bookmakers||[]).find(b => b.key === 'betonlineag');
+        if(!bk){ failed++; continue; }
+        const mkt = (bk.markets||[]).find(m => m.key === 'h2h');
+        if(!mkt){ failed++; continue; }
+        // Find the outcome for this team
+        const teamName = ev.is_away ? ev.away_team : ev.home_team;
+        const outcome = mkt.outcomes.find(o => o.name === teamName);
+        if(!outcome){ failed++; continue; }
+        const closingOdds = outcome.price;
+        // Store on pick and save
+        p._closingBO = closingOdds;
+        await saveOvernightToFirebase(p);
+        // Cache in Firestore
+        try { await db.collection('closing_lines').doc(cacheKey).set({ odds: closingOdds, team: p.tx, date: ymd2, eventId: ev.id }); } catch(e){}
+        fetched++;
+      } catch(e){ console.warn('CLV odds fetch failed for', p.tx, e); failed++; }
+    }
+  }
+
+  localStorage.setItem('mlb26v3', JSON.stringify(S));
+  rOvernights();
+  const parts = [];
+  if(fetched) parts.push(`${fetched} fetched`);
+  if(skipped) parts.push(`${skipped} skipped (no event match)`);
+  if(failed) parts.push(`${failed} failed`);
+  const msg = parts.join(', ');
+  if(status) status.textContent = '✓ ' + msg;
+  toast(msg);
 }
 
 // ═══════════════════════════════════════════════
