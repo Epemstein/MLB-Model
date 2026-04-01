@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>xMLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -867,6 +867,13 @@ input[type=number] { -moz-appearance:textfield; }
         <div style="font-size:10px;color:var(--muted);margin-bottom:2px;">Kelly Rec ($)</div>
         <div id="p-kelly-rec" style="font-size:14px;font-weight:700;color:var(--accent);">—</div>
         <div id="p-kelly-pct" style="font-size:10px;color:var(--muted);">0.00% of today's bankroll</div>
+      </div>
+      <div class="fg">
+        <label class="fl">Actual $ <span style="font-size:9px;color:var(--muted);font-weight:400;">(override)</span></label>
+        <input type="number" id="p-actual" placeholder="leave blank = rec $" step="1"
+          style="width:100%;font-family:Calibri,sans-serif;font-size:11px;padding:4px 6px;border:1px solid var(--border2);border-radius:3px;"
+          oninput="updateActualOverride()" />
+        <div id="p-actual-note" style="font-size:9px;color:var(--muted);margin-top:2px;"></div>
       </div>
       <div class="fg"><label class="fl">Result</label>
         <select id="p-rs"><option value="Pending">Pending</option><option value="Win">Win</option><option value="Loss">Loss</option></select>
@@ -2515,7 +2522,10 @@ function addPick(){
   const ku  = calcKellyUnits(od, edFinal);
   const uw  = calcWon(od, un, rs);
   const kuw = calcWon(od, ku, rs);
+  const actualRaw = document.getElementById('p-actual').value.trim();
+  const _kellyActual = actualRaw !== '' ? parseFloat(actualRaw) : null;
   const newPick={id:Date.now(),dt,gt,tx,opp,ha,od,ed:edFinal,xwp,un,ku,rs,uw,kuw,tp};
+  if(_kellyActual !== null) newPick._kellyActual = _kellyActual;
   S.picks.push(newPick);
   savePickToFirebase(newPick);
   sendTelegramPick(newPick);
@@ -2523,7 +2533,8 @@ function addPick(){
   localStorage.setItem('mlb26v3',JSON.stringify(S));
   rPicks();rPerf();
   if(document.getElementById("panel-kelly-tracker").classList.contains("active")) renderKellyTracker();
-  ['p-tx','p-opp','p-od','p-xwp','p-ed','p-gt'].forEach(id=>document.getElementById(id).value='');
+  ['p-tx','p-opp','p-od','p-xwp','p-ed','p-gt','p-actual'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('p-actual-note').textContent = '';
   updatePickLogo();
   document.getElementById('p-ha').textContent='vs';
   document.getElementById('p-un').value='1';document.getElementById('p-rs').value='Pending';
@@ -4093,6 +4104,23 @@ function confirmDailyBR(ymd, amount){
   toast('Start set for ' + ymd + ': $' + Math.round(amount).toLocaleString());
 }
 
+function updateActualOverride(){
+  const actualInput = document.getElementById('p-actual');
+  const note = document.getElementById('p-actual-note');
+  const recEl = document.getElementById('p-kelly-rec');
+  if(!actualInput || !note || !recEl) return;
+  const actual = parseFloat(actualInput.value);
+  const recText = recEl.textContent.replace(/[$,]/g,'');
+  const rec = parseFloat(recText);
+  if(isNaN(actual) || actualInput.value.trim() === ''){
+    note.textContent = '';
+    return;
+  }
+  if(!isNaN(rec) && rec > 0){
+    const diff = actual - rec;
+    note.textContent = (diff >= 0 ? '+' : '') + '$' + Math.round(diff).toLocaleString() + ' vs rec';
+    note.style.color = diff >= 0 ? 'var(--green)' : 'var(--red)';
+  }
 function updateKellyRec(){
   // Update Kelly $ recommendation in log pick form
   const od = parseFloat(document.getElementById('p-od')?.value);
