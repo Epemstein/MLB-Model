@@ -928,19 +928,66 @@ input[type=number] { -moz-appearance:textfield; }
 
 <!-- ══ PERFORMANCE ══ -->
 <div id="panel-perf" class="panel">
-  <div class="sr">
-    <div class="st cg"><div class="sl">Net Units</div><div class="sv g" id="pf-u">+0.00u</div><div class="ss">season</div></div>
+
+  <!-- ── Controls row ── -->
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
+    <!-- Toggle: Global / Daily Picks -->
+    <div style="display:flex;border:1px solid var(--border2);border-radius:6px;overflow:hidden;font-size:11px;font-weight:600;">
+      <button id="perf-toggle-global" onclick="setPerfSource('global')"
+        style="padding:6px 14px;background:var(--accent);color:#fff;border:none;cursor:pointer;">Global</button>
+      <button id="perf-toggle-picks" onclick="setPerfSource('picks')"
+        style="padding:6px 14px;background:var(--surface);color:var(--muted);border:none;cursor:pointer;">Daily Picks</button>
+    </div>
+    <!-- Edge slider -->
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-size:11px;color:var(--muted);white-space:nowrap;">Min Edge:</span>
+      <input type="range" id="perf-edge-slider" min="0" max="10" step="0.5" value="0"
+        oninput="onPerfSlider(this.value)"
+        style="width:140px;accent-color:var(--accent);" />
+      <span id="perf-edge-label" style="font-size:12px;font-weight:700;color:var(--accent);min-width:32px;">0%</span>
+    </div>
+    <span id="perf-filter-note" style="font-size:10px;color:var(--muted);"></span>
+  </div>
+
+  <!-- ── Stat cards ── -->
+  <div class="sr" style="margin-bottom:14px;">
+    <div class="st cg"><div class="sl">Net Units</div><div class="sv g" id="pf-u">+0.00u</div><div class="ss">filtered</div></div>
     <div class="st ca"><div class="sl">Record</div><div class="sv" id="pf-rc">0-0</div></div>
     <div class="st ca"><div class="sl">Win Rate</div><div class="sv a" id="pf-wr">—</div></div>
     <div class="st cy"><div class="sl">ROI</div><div class="sv y" id="pf-ri">—</div></div>
     <div class="st ca"><div class="sl">Avg Edge</div><div class="sv" id="pf-ae">—</div></div>
     <div class="st ca"><div class="sl">Pending</div><div class="sv" id="pf-pd">0</div></div>
   </div>
+
+  <!-- ── Charts row ── -->
   <div class="g2" style="margin-bottom:14px;">
     <div class="card"><div class="ct">P/L Curve</div><div class="cw"><canvas id="ch-pl"></canvas></div></div>
-    <div class="card"><div class="ct">Edge Distribution</div><div class="cw"><canvas id="ch-ed"></canvas></div></div>
+    <div class="card"><div class="ct">Edge Distribution</div><div class="cw" style="height:160px;"><canvas id="ch-ed"></canvas></div></div>
   </div>
-  <div class="card"><div class="ct">Monthly Net Units</div><div class="cw"><canvas id="ch-mo"></canvas></div></div>
+
+  <!-- ── Bottom table (condensed read-only) ── -->
+  <div class="card">
+    <div class="ct"><span id="perf-table-label">Global Pick Log</span>
+      <span style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);" id="perf-table-ct"></span>
+    </div>
+    <div class="sw" style="max-height:400px;overflow-y:auto;">
+      <table class="dt" style="font-size:10px;">
+        <thead><tr>
+          <th style="width:60px">Date</th>
+          <th style="width:55px">Pick</th>
+          <th style="width:70px">Opp</th>
+          <th style="width:60px;text-align:right">Odds</th>
+          <th style="width:45px;text-align:right">xWP</th>
+          <th style="width:50px;text-align:right">Edge</th>
+          <th style="width:40px;text-align:right">Bet</th>
+          <th style="width:55px">Result</th>
+          <th style="width:55px;text-align:right">Won</th>
+          <th style="width:65px;text-align:right">Running</th>
+        </tr></thead>
+        <tbody id="perf-table-body"><tr><td colspan="10" class="nd">No data.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <!-- ══ HITTER PROJECTIONS ══ -->
@@ -3119,29 +3166,106 @@ async function deleteGlobalFromFirebase(id){
   try { await db.collection('global_picks').doc(String(id)).delete(); } catch(e){}
 }
 
+// ═══════════════════════════════════════════════
+// PERFORMANCE TAB
+// ═══════════════════════════════════════════════
+let _perfSource = 'global';
+let _perfMinEdge = 0;
+
+function setPerfSource(src){
+  _perfSource = src;
+  const bg = document.getElementById('perf-toggle-global');
+  const bp = document.getElementById('perf-toggle-picks');
+  if(bg && bp){
+    bg.style.background = src==='global' ? 'var(--accent)' : 'var(--surface)';
+    bg.style.color       = src==='global' ? '#fff' : 'var(--muted)';
+    bp.style.background  = src==='picks'  ? 'var(--accent)' : 'var(--surface)';
+    bp.style.color       = src==='picks'  ? '#fff' : 'var(--muted)';
+  }
+  const lbl = document.getElementById('perf-table-label');
+  if(lbl) lbl.textContent = src==='global' ? 'Global Pick Log' : 'Daily Pick Log';
+  rPerf();
+}
+
+function onPerfSlider(val){
+  _perfMinEdge = parseFloat(val) || 0;
+  const lbl = document.getElementById('perf-edge-label');
+  if(lbl) lbl.textContent = _perfMinEdge.toFixed(1) + '%';
+  rPerf();
+}
+
+function getPerfPicks(){
+  const src = _perfSource === 'global' ? S.global : S.picks;
+  return src.filter(p => (p.ed || 0) >= _perfMinEdge);
+}
+
 function rPerf(){
-  const res=S.picks.filter(p=>p.rs!=='Pending');
-  const wins=res.filter(p=>p.rs==='Win').length;
-  const tot=res.reduce((a,p)=>a+p.uw,0);
-  const risk=res.reduce((a,p)=>a+p.un,0);
-  const roi=risk>0?(tot/risk)*100:0;
-  const avg=S.picks.length?S.picks.reduce((a,p)=>a+p.ed,0)/S.picks.length:0;
-  const pend=S.picks.filter(p=>p.rs==='Pending').length;
-  document.getElementById('pf-u').textContent=(tot>=0?'+':'')+tot.toFixed(2)+'u';
-  document.getElementById('pf-u').className='sv '+(tot>=0?'g':'r');
-  document.getElementById('pf-rc').textContent=wins+'-'+(res.length-wins);
-  document.getElementById('pf-wr').textContent=res.length?(wins/res.length*100).toFixed(1)+'%':'—';
-  document.getElementById('pf-ri').textContent=risk?(roi>=0?'+':'')+roi.toFixed(1)+'%':'—';
-  document.getElementById('pf-ae').textContent=avg.toFixed(1)+'%';
-  document.getElementById('pf-pd').textContent=pend;
-  const unit=S.br.unit,start=S.br.start;
-  const pnl=tot*unit,cur=start+pnl,pct=(cur-start)/start*100;
-  document.getElementById('br-c').textContent='$'+cur.toLocaleString('en-US',{maximumFractionDigits:0});
-  document.getElementById('br-p').textContent=(pct>=0?'+':'')+pct.toFixed(2)+'%';
-  document.getElementById('br-w').textContent='$'+(risk*unit).toLocaleString('en-US',{maximumFractionDigits:0});
-  document.getElementById('br-pnl').textContent=(pnl>=0?'+$':'-$')+Math.abs(pnl).toLocaleString('en-US',{maximumFractionDigits:0});
-  document.getElementById('br-pnl').style.color=pnl>=0?'var(--green)':'var(--red)';
+  const picks = getPerfPicks();
+  const res   = picks.filter(p => p.rs !== 'Pending');
+  const wins  = res.filter(p => p.rs === 'Win').length;
+  const tot   = res.reduce((a,p) => a + p.uw, 0);
+  const risk  = res.reduce((a,p) => a + p.un, 0);
+  const roi   = risk > 0 ? (tot/risk)*100 : 0;
+  const avg   = picks.length ? picks.reduce((a,p) => a + (p.ed||0), 0) / picks.length : 0;
+  const pend  = picks.filter(p => p.rs === 'Pending').length;
+
+  const note = document.getElementById('perf-filter-note');
+  const allSrc = _perfSource==='global' ? S.global : S.picks;
+  if(note) note.textContent = picks.length !== allSrc.length
+    ? `${picks.length} of ${allSrc.length} bets shown`
+    : `${picks.length} bet${picks.length!==1?'s':''}`;
+
+  document.getElementById('pf-u').textContent  = (tot>=0?'+':'')+tot.toFixed(2)+'u';
+  document.getElementById('pf-u').className    = 'sv '+(tot>=0?'g':'r');
+  document.getElementById('pf-rc').textContent = wins+'-'+(res.length-wins);
+  document.getElementById('pf-wr').textContent = res.length ? (wins/res.length*100).toFixed(1)+'%' : '—';
+  document.getElementById('pf-ri').textContent = risk ? (roi>=0?'+':'')+roi.toFixed(1)+'%' : '—';
+  document.getElementById('pf-ae').textContent = avg.toFixed(1)+'%';
+  document.getElementById('pf-pd').textContent = pend;
+
+  // Bankroll panel always uses Daily Picks
+  const allRes = S.picks.filter(p=>p.rs!=='Pending');
+  const allTot = allRes.reduce((a,p)=>a+p.uw,0);
+  const unit=S.br.unit, start=S.br.start;
+  const pnl=allTot*unit, cur=start+pnl, pct=(cur-start)/start*100;
+  const brc=document.getElementById('br-c'), brp=document.getElementById('br-p');
+  const brw=document.getElementById('br-w'), brpnl=document.getElementById('br-pnl');
+  if(brc) brc.textContent='$'+cur.toLocaleString('en-US',{maximumFractionDigits:0});
+  if(brp) brp.textContent=(pct>=0?'+':'')+pct.toFixed(2)+'%';
+  if(brw) brw.textContent='$'+(allRes.reduce((a,p)=>a+p.un,0)*unit).toLocaleString('en-US',{maximumFractionDigits:0});
+  if(brpnl){ brpnl.textContent=(pnl>=0?'+$':'-$')+Math.abs(pnl).toLocaleString('en-US',{maximumFractionDigits:0}); brpnl.style.color=pnl>=0?'var(--green)':'var(--red)'; }
   updateDailyBRStatusPanel();
+  rCharts(picks);
+  rPerfTable(picks);
+}
+
+function rPerfTable(picks){
+  const tbody = document.getElementById('perf-table-body');
+  const ct    = document.getElementById('perf-table-ct');
+  if(!tbody) return;
+  if(ct) ct.textContent = picks.length + ' bet' + (picks.length!==1?'s':'');
+  if(!picks.length){ tbody.innerHTML='<tr><td colspan="10" class="nd">No data.</td></tr>'; return; }
+  let fwdRun = 0;
+  const runningTotals = picks.map(p => { if(p.rs!=='Pending') fwdRun+=p.uw; return fwdRun; });
+  tbody.innerHTML = [...picks].map((p,i) => ({p,run:runningTotals[i]})).reverse().map(({p,run}) => {
+    const rc=run>=0?'var(--green)':'var(--red)';
+    const won=p.rs==='Pending'?'—':(p.uw>=0?'+':'')+p.uw.toFixed(2)+'u';
+    const runS=p.rs==='Pending'?'—':(run>=0?'+':'')+run.toFixed(2)+'u';
+    const wc=p.uw>0?'var(--green)':p.uw<0?'var(--red)':'var(--muted)';
+    const rsColor=p.rs==='Win'?'var(--green)':p.rs==='Loss'?'var(--red)':'var(--muted)';
+    return `<tr>
+      <td style="color:var(--muted);font-size:9px;white-space:nowrap">${fmtDtFull(p.dt)}</td>
+      <td style="font-weight:600;white-space:nowrap"><img src="${teamLogo(p.tx)}" width="13" height="13" style="object-fit:contain;vertical-align:middle;margin-right:3px;" onerror="this.style.display='none'" />${p.tx||'—'}</td>
+      <td style="color:var(--muted);font-size:9px">${p.ha||'vs'} ${p.opp||'—'}</td>
+      <td style="text-align:right">${p.od>0?'+':''}${p.od}</td>
+      <td style="color:var(--muted);text-align:right">${p.xwp?p.xwp.toFixed(1)+'%':'—'}</td>
+      <td style="color:${(p.ed||0)>0?'var(--green)':(p.ed||0)<0?'var(--red)':'var(--muted)'};text-align:right">${(p.ed||0)>=0?'+':''}${(p.ed||0).toFixed(1)}%</td>
+      <td style="text-align:right;color:var(--muted)">${p.un}u</td>
+      <td style="color:${rsColor};font-weight:600">${p.rs}</td>
+      <td style="color:${wc};text-align:right">${won}</td>
+      <td style="color:${rc};font-weight:600;text-align:right">${runS}</td>
+    </tr>`;
+  }).join('');
 }
 
 // ═══════════════════════════════════════════════
@@ -3648,21 +3772,20 @@ Chart.defaults.color='#999';
 Chart.defaults.borderColor='#e0e0e0';
 Chart.defaults.font.family="Calibri,sans-serif";
 Chart.defaults.font.size=11;
-function rCharts(){
-  const res=S.picks.filter(p=>p.rs!=='Pending');
-  let run=0;const plD=[{x:0,y:0}];
+function rCharts(picks){
+  picks = picks || getPerfPicks();
+  const res = picks.filter(p => p.rs !== 'Pending');
+  // P/L Curve
+  let run=0; const plD=[{x:0,y:0}];
   res.forEach((p,i)=>{run+=p.uw;plD.push({x:i+1,y:+run.toFixed(3)});});
   if(CH.pl)CH.pl.destroy();
-  const plColor = (plD.at(-1)?.y||0)>=0?'#2e7d32':'#c62828';
+  const plColor=(plD.at(-1)?.y||0)>=0?'#2e7d32':'#c62828';
   CH.pl=new Chart(document.getElementById('ch-pl'),{type:'line',data:{datasets:[{data:plD,borderColor:plColor,backgroundColor:'transparent',borderWidth:2,pointRadius:res.length<=40?3:0,tension:.2,fill:{target:{value:0},above:'rgba(46,125,50,.08)',below:'rgba(198,40,40,.08)'}}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{type:'linear',grid:{color:'#f0f0f0'}},y:{grid:{color:'#f0f0f0'},ticks:{callback:v=>(v>=0?'+':'')+v+'u'}}}}});
-  const eb={};S.picks.forEach(p=>{const b=Math.floor(p.ed);eb[b]=(eb[b]||0)+1;});
-  const ek=Object.keys(eb).sort((a,b)=>a-b);
+  // Edge Distribution
+  const eb={}; picks.forEach(p=>{const b=Math.floor(p.ed||0);eb[b]=(eb[b]||0)+1;});
+  const ek=Object.keys(eb).map(Number).sort((a,b)=>a-b);
   if(CH.ed)CH.ed.destroy();
-  CH.ed=new Chart(document.getElementById('ch-ed'),{type:'bar',data:{labels:ek.map(k=>k+'%+'),datasets:[{data:ek.map(k=>eb[k]),backgroundColor:'rgba(26,111,181,.2)',borderColor:'rgba(26,111,181,.8)',borderWidth:1,borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#f0f0f0'}},y:{grid:{color:'#f0f0f0'},ticks:{stepSize:1}}}}});
-  const mb={};res.forEach(p=>{const m=p.dt.slice(0,7);mb[m]=(mb[m]||0)+p.uw;});
-  const mk=Object.keys(mb).sort(),mv=mk.map(k=>+mb[k].toFixed(2));
-  if(CH.mo)CH.mo.destroy();
-  CH.mo=new Chart(document.getElementById('ch-mo'),{type:'bar',data:{labels:mk,datasets:[{data:mv,backgroundColor:mv.map(v=>v>=0?'rgba(46,125,50,.25)':'rgba(198,40,40,.25)'),borderColor:mv.map(v=>v>=0?'#2e7d32':'#c62828'),borderWidth:1,borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#f0f0f0'}},y:{grid:{color:'#f0f0f0'},ticks:{callback:v=>(v>=0?'+':'')+v+'u'}}}}});
+  CH.ed=new Chart(document.getElementById('ch-ed'),{type:'bar',data:{labels:ek.map(k=>k+'%'),datasets:[{data:ek.map(k=>eb[k]),backgroundColor:'rgba(26,111,181,.2)',borderColor:'rgba(26,111,181,.8)',borderWidth:1,borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#f0f0f0'}},y:{grid:{color:'#f0f0f0'},ticks:{stepSize:1}}}}});
 }
 function rBRChart(){
   const res=S.picks.filter(p=>p.rs!=='Pending');
@@ -4075,7 +4198,7 @@ function showPanel(name,btn){
   if(name==='kelly-tracker'){renderKellyTracker();}
   if(name==='overnights'){initOvernightDate();rOvernights();}
   if(name==='global'){initGlobalDate();rGlobal();}
-  if(name==='perf')rCharts();
+  if(name==='perf'){ setPerfSource(_perfSource); rPerf(); }
   if(name==='teams'){initTeamBtns();renderTeam(currentTeam);}
   if(name==='proj-h')rProjH();
   if(name==='proj-p')rProjP();
