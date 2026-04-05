@@ -1704,6 +1704,8 @@ function applyFanGraphsLineups(games, fgGames){
     if(candidates.length <= 1){
       game = candidates[0];
     } else {
+      // For doubleheaders: skip G2 FG lineup entirely — FG doesn't post G2 until G1 starts
+      // G2 will show as WAR projected with a note
       // Use FanGraphs game time to match the right game in a doubleheader
       // FG schedule.GameTime is like "1:10 PM" — compare with commenceTime
       const fgTimeStr = sched.GameTime || sched.gameTime || '';
@@ -1722,7 +1724,13 @@ function applyFanGraphsLineups(games, fgGames){
       }
     }
     if(!game) continue;
-    game._fgMatched = true; // mark so second DH game gets second FG entry
+    // Skip FG lineup application for doubleheader G2 — lineups not available until G1 starts
+    if(game.doubleHeader && game.doubleHeader !== 'N' && game.gameNumber === 2){
+      game._fgMatched = true;
+      game.isDHGame2 = true; // flag for display
+      continue;
+    }
+    game._fgMatched = true;
 
     const lineupInfo = fg.lineups || {};
     // Filter out openers (OP) and probable pitchers (PP) from batting lineup
@@ -2317,7 +2325,7 @@ function rGames(){
 
     return `<div class="gc${valCls}" id="gc-${gid}">
 
-      <div class="gc-time">${r.gameTime||'Today'}${g.doubleHeader && g.doubleHeader !== 'N' ? ` <span style="font-size:9px;font-weight:700;color:var(--accent);margin-left:4px;">G${g.gameNumber}</span>` : ''} <span style="margin-left:6px;font-size:9px;font-weight:700;letter-spacing:.04em;color:${g.hasLineup?'#2e7d32':g.hasBMLineup?'#e65100':'#999'}">${g.hasLineup?'✓ CONFIRMED':g.hasBMLineup?'~ FG PROJECTED':'~ WAR PROJECTED'}</span></div>
+      <div class="gc-time">${g.isDHGame2 ? 'TBD (after G1)' : r.gameTime||'Today'}${g.doubleHeader && g.doubleHeader !== 'N' ? ` <span style="font-size:9px;font-weight:700;color:var(--accent);margin-left:4px;">G${g.gameNumber}</span>` : ''} <span style="margin-left:6px;font-size:9px;font-weight:700;letter-spacing:.04em;color:${g.hasLineup?'#2e7d32':g.hasBMLineup?'#e65100':'#999'}">${g.isDHGame2 ? '~ Lineup after G1' : g.hasLineup?'✓ CONFIRMED':g.hasBMLineup?'~ FG PROJECTED':'~ WAR PROJECTED'}</span></div>
       <div style="display:flex;">
         <div style="flex:1;padding:3px 12px;font-size:9px;font-weight:700;letter-spacing:.04em;text-align:center;background:${g.awConfirmed||g.hasLineup?'#e8f5e9':'#fffde7'};color:${g.awConfirmed||g.hasLineup?'#2e7d32':'#6d5c00'};border-right:1px solid var(--border);">${g.awConfirmed||g.hasLineup?'✓ Lineup Confirmed':'~ Projected Lineup'}</div>
         <div style="flex:1;padding:3px 12px;font-size:9px;font-weight:700;letter-spacing:.04em;text-align:center;background:${g.hwConfirmed||g.hasLineup?'#e8f5e9':'#fffde7'};color:${g.hwConfirmed||g.hasLineup?'#2e7d32':'#6d5c00'};">${g.hwConfirmed||g.hasLineup?'✓ Lineup Confirmed':'~ Projected Lineup'}</div>
@@ -3551,7 +3559,7 @@ function updGStats(calcs){
   rows.push(`<tr>
       <td rowspan="2" style="${f}color:var(--muted);font-size:11px;vertical-align:middle;border-right:1px solid var(--border);white-space:nowrap;background:#fff;">
         <div style="font-weight:600;color:var(--text)">${game}${lineupDot}</div>
-        <div style="font-size:10px;margin-top:2px;">${r.gameTime||''}</div>
+        <div style="font-size:10px;margin-top:2px;">${g.isDHGame2 ? 'TBD (after G1)' : r.gameTime||''}</div>
       </td>
       <td style="${f}color:#000;font-weight:600;${awBg}cursor:pointer;height:30px;vertical-align:middle;" title="Click to log bet" onclick="logTeam(this)" data-gid="${gid}" data-team="${g.away}" data-opp="${g.home}" data-edge="${ae}" data-xwp="${(n(r.awWP)*100).toFixed(2)}" data-time="${r.gameTime||''}" data-home="false" data-fallback="${g.myAwOdds||g.awayOdds||g.awayBO}" class="odds-team-cell">
         <img src="${teamLogo(g.away)}" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display='none'" />
