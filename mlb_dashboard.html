@@ -1201,8 +1201,8 @@ input[type=number] { -moz-appearance:textfield; }
       <div class="fg"><label class="fl">Pick</label><input type="text" id="gl-tx" placeholder="NYY" oninput="updateGlobalPickLogo()"/></div>
       <div class="fg"><label class="fl" style="opacity:0">vs</label><div style="display:flex;align-items:center;gap:6px;padding-top:2px;"><span id="gl-ha" style="font-size:11px;font-weight:600;color:var(--muted);min-width:20px;text-align:center;cursor:pointer;" onclick="this.textContent=this.textContent==='vs'?'@':'vs'">vs</span><input type="text" id="gl-opp" placeholder="SFG" style="flex:1"/></div></div>
       <div class="fg"><label class="fl">Odds</label><input type="number" id="gl-od" placeholder="+130" oninput="autoCalcGlobalEdge()"/></div>
-      <div class="fg"><label class="fl">xWP %</label><input type="number" id="gl-xwp" placeholder="52.9" step="0.01" readonly style="background:#f8f8f8;color:var(--muted)"/></div>
-      <div class="fg"><label class="fl">Edge %</label><input type="number" id="gl-ed" placeholder="auto" step="0.01" readonly style="background:#f8f8f8;color:var(--muted)"/></div>
+      <div class="fg"><label class="fl">xWP %</label><input type="number" id="gl-xwp" placeholder="52.9" step="0.01" oninput="autoCalcGlobalEdge()"/></div>
+      <div class="fg"><label class="fl">Edge %</label><input type="number" id="gl-ed" placeholder="auto" step="0.01"/></div>
       <div class="fg"><label class="fl">Result</label>
         <select id="gl-rs"><option value="Pending">Pending</option><option value="Win">Win</option><option value="Loss">Loss</option></select>
       </div>
@@ -1218,7 +1218,7 @@ input[type=number] { -moz-appearance:textfield; }
       <th style="width:42px">Bet No.</th>
       <th style="width:28px"></th>
       <th style="width:90px;white-space:nowrap">Placed</th>
-      <th style="width:70px">Date</th>
+      <th style="width:70px;cursor:pointer;user-select:none;" onclick="toggleGlobalSort()" title="Click to sort by date">Date <span id="gl-sort-icon">↓</span></th>
       <th style="width:60px">Pick</th>
       <th style="width:80px">Opp</th>
       <th style="width:90px">Game Time</th>
@@ -3264,25 +3264,42 @@ async function runGlobal(){
   }
 }
 
+let _globalSortAsc = false; // default: newest first (desc)
+
+function toggleGlobalSort(){
+  _globalSortAsc = !_globalSortAsc;
+  const icon = document.getElementById('gl-sort-icon');
+  if(icon) icon.textContent = _globalSortAsc ? '↑' : '↓';
+  rGlobal();
+}
+
 function rGlobal(){
   const b = document.getElementById('glb');
   document.getElementById('gl-ct').textContent = S.global.length + ' bet' + (S.global.length !== 1 ? 's' : '');
   if(!S.global.length){ b.innerHTML = '<tr><td colspan="15" class="nd">No global picks yet.</td></tr>'; return; }
 
+  // Sort by date then by id (insertion order within same date)
+  const sorted = [...S.global].sort((a, b) => {
+    const ay = a.dt && a.dt.includes('/') ? dateToYMD(a.dt) : (a.dt||'');
+    const by = b.dt && b.dt.includes('/') ? dateToYMD(b.dt) : (b.dt||'');
+    if(ay !== by) return _globalSortAsc ? ay.localeCompare(by) : by.localeCompare(ay);
+    return _globalSortAsc ? a.id - b.id : b.id - a.id;
+  });
+
   let fwdRun = 0;
-  const runningTotals = S.global.map(p => {
+  const runningTotals = sorted.map(p => {
     if(p.rs !== 'Pending') fwdRun += p.uw;
     return { run: fwdRun };
   });
 
-  b.innerHTML = [...S.global].map((p,i) => ({p, rt:runningTotals[i]})).reverse().map(({p,rt},i) => {
+  b.innerHTML = sorted.map((p,i) => ({p, rt:runningTotals[i]})).map(({p,rt},i) => {
     const run = rt.run;
     const rc = run >= 0 ? 'var(--green)' : 'var(--red)';
     const wonStr = p.rs === 'Pending' ? '—' : (p.uw >= 0 ? '+' : '') + p.uw.toFixed(2) + 'u';
     const runStr = p.rs === 'Pending' ? '—' : (run >= 0 ? '+' : '') + run.toFixed(2) + 'u';
     const wc = p.uw > 0 ? 'var(--green)' : p.uw < 0 ? 'var(--red)' : 'var(--muted)';
     return `<tr>
-      <td style="color:var(--muted);text-align:center">${S.global.length - i}</td>
+      <td style="color:var(--muted);text-align:center">${_globalSortAsc ? i+1 : S.global.length - i}</td>
       <td style="text-align:center"><button class="btn bg" style="padding:2px 6px;font-size:9px;" onclick="event.stopPropagation();openEditPick(${p.id},'global')">✎</button></td>
       <td style="color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${p.tp||'—'}</td>
       <td style="white-space:nowrap;font-size:11px">${fmtDtFull(p.dt)}</td>
