@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>xMLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -1589,8 +1589,10 @@ function parseMLBGame(game){
     away: aw, home: hw,
     awayFull: game.teams.away.team.name,
     homeFull: game.teams.home.team.name,
-    awayOdds: 0, homeOdds: 0,  // odds filled separately if available
+    awayOdds: 0, homeOdds: 0,
     commenceTime: game.gameDate || '',
+    doubleHeader: game.doubleHeader || 'N',
+    gameNumber: game.gameNumber || 1,
     awaySpName: awSP.name, awaySpWar: awSP.war162, awaySpGs: awSP.gs,
     homeSpName: hwSP.name, homeSpWar: hwSP.war162, homeSpGs: hwSP.gs,
     lineupOverrides,
@@ -1702,9 +1704,22 @@ function applyFanGraphsLineups(games, fgGames){
     if(candidates.length <= 1){
       game = candidates[0];
     } else {
-      // FanGraphs schedule has GameID with game time — match closest commence_time
-      const fgTime = sched.GameTime || sched.gameTime || '';
-      game = candidates.find(g => !g._fgMatched) || candidates[0]; // fallback: first unmatched
+      // Use FanGraphs game time to match the right game in a doubleheader
+      // FG schedule.GameTime is like "1:10 PM" — compare with commenceTime
+      const fgTimeStr = sched.GameTime || sched.gameTime || '';
+      if(fgTimeStr){
+        // Parse FG time and find closest MLB game
+        const today = new Date().toISOString().slice(0,10);
+        const fgDate = new Date(`${today}T${new Date('1970-01-01 ' + fgTimeStr).toISOString().slice(11,16)}:00`);
+        game = candidates.reduce((best, g) => {
+          const gMs = Math.abs(new Date(g.commenceTime).getTime() - fgDate.getTime());
+          const bMs = Math.abs(new Date(best.commenceTime).getTime() - fgDate.getTime());
+          return gMs < bMs ? g : best;
+        }, candidates[0]);
+      } else {
+        // No time available — pick first unmatched
+        game = candidates.find(g => !g._fgMatched) || null;
+      }
     }
     if(!game) continue;
     game._fgMatched = true; // mark so second DH game gets second FG entry
@@ -2302,7 +2317,7 @@ function rGames(){
 
     return `<div class="gc${valCls}" id="gc-${gid}">
 
-      <div class="gc-time">${r.gameTime||'Today'} <span style="margin-left:6px;font-size:9px;font-weight:700;letter-spacing:.04em;color:${g.hasLineup?'#2e7d32':g.hasBMLineup?'#e65100':'#999'}">${g.hasLineup?'✓ CONFIRMED':g.hasBMLineup?'~ FG PROJECTED':'~ WAR PROJECTED'}</span></div>
+      <div class="gc-time">${r.gameTime||'Today'}${g.doubleHeader && g.doubleHeader !== 'N' ? ` <span style="font-size:9px;font-weight:700;color:var(--accent);margin-left:4px;">G${g.gameNumber}</span>` : ''} <span style="margin-left:6px;font-size:9px;font-weight:700;letter-spacing:.04em;color:${g.hasLineup?'#2e7d32':g.hasBMLineup?'#e65100':'#999'}">${g.hasLineup?'✓ CONFIRMED':g.hasBMLineup?'~ FG PROJECTED':'~ WAR PROJECTED'}</span></div>
       <div style="display:flex;">
         <div style="flex:1;padding:3px 12px;font-size:9px;font-weight:700;letter-spacing:.04em;text-align:center;background:${g.awConfirmed||g.hasLineup?'#e8f5e9':'#fffde7'};color:${g.awConfirmed||g.hasLineup?'#2e7d32':'#6d5c00'};border-right:1px solid var(--border);">${g.awConfirmed||g.hasLineup?'✓ Lineup Confirmed':'~ Projected Lineup'}</div>
         <div style="flex:1;padding:3px 12px;font-size:9px;font-weight:700;letter-spacing:.04em;text-align:center;background:${g.hwConfirmed||g.hasLineup?'#e8f5e9':'#fffde7'};color:${g.hwConfirmed||g.hasLineup?'#2e7d32':'#6d5c00'};">${g.hwConfirmed||g.hasLineup?'✓ Lineup Confirmed':'~ Projected Lineup'}</div>
@@ -3487,7 +3502,8 @@ function updGStats(calcs){
 
     const awBg = edgeBg(awEdge != null ? awEdge*100 : 0);
     const hwBg = edgeBg(hwEdge != null ? hwEdge*100 : 0);
-    const game = `${g.away} @ ${g.home}`;
+    const dhLabel = (g.doubleHeader && g.doubleHeader !== 'N') ? ` G${g.gameNumber}` : '';
+    const game = `${g.away} @ ${g.home}${dhLabel}`;
     const f = 'font-family:Calibri,sans-serif;vertical-align:middle;';
     const bothConfirmed = g.awConfirmed && g.hwConfirmed;
     const anyProjected = g.hasBMLineup && !bothConfirmed;
