@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>xMLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -1193,8 +1193,26 @@ input[type=number] { -moz-appearance:textfield; }
       <span id="global-status" style="font-size:11px;font-family:var(--mono);color:var(--muted);"></span>
     </div>
   </div>
-  <div class="card">
-    <div class="ct">Global Pick Log <span id="gl-ct" style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);"></span></div>
+  <div class="card" style="margin-bottom:14px;">
+    <div class="ct">Log Global Pick Manually</div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Game Date</label><input type="date" id="gl-dt"/></div>
+      <div class="fg"><label class="fl">Game Time</label><input type="text" id="gl-gt" placeholder="4:05 PM ET" style="background:#f8f8f8;color:var(--muted)" readonly/></div>
+      <div class="fg"><label class="fl">Pick</label><input type="text" id="gl-tx" placeholder="NYY" oninput="updateGlobalPickLogo()"/></div>
+      <div class="fg"><label class="fl" style="opacity:0">vs</label><div style="display:flex;align-items:center;gap:6px;padding-top:2px;"><span id="gl-ha" style="font-size:11px;font-weight:600;color:var(--muted);min-width:20px;text-align:center;cursor:pointer;" onclick="this.textContent=this.textContent==='vs'?'@':'vs'">vs</span><input type="text" id="gl-opp" placeholder="SFG" style="flex:1"/></div></div>
+      <div class="fg"><label class="fl">Odds</label><input type="number" id="gl-od" placeholder="+130" oninput="autoCalcGlobalEdge()"/></div>
+      <div class="fg"><label class="fl">xWP %</label><input type="number" id="gl-xwp" placeholder="52.9" step="0.01" readonly style="background:#f8f8f8;color:var(--muted)"/></div>
+      <div class="fg"><label class="fl">Edge %</label><input type="number" id="gl-ed" placeholder="auto" step="0.01" readonly style="background:#f8f8f8;color:var(--muted)"/></div>
+      <div class="fg"><label class="fl">Result</label>
+        <select id="gl-rs"><option value="Pending">Pending</option><option value="Win">Win</option><option value="Loss">Loss</option></select>
+      </div>
+    </div>
+    <button class="btn" onclick="addGlobalPick()" style="display:flex;align-items:center;gap:0;min-width:160px;padding:8px 16px;font-size:13px;font-weight:600;background:linear-gradient(to right,#e8f3ff,#c5dff8);color:#1a3a5c;border:1px solid #a8c8ee;border-radius:5px;box-shadow:3px 3px 8px rgba(0,0,0,.15);cursor:pointer;margin-top:10px;">
+      <span style="display:inline-block;width:26px;height:26px;flex-shrink:0;"><img id="gl-pick-logo" src="" style="width:26px;height:26px;object-fit:contain;display:none;" /></span>
+      <span style="margin-left:8px;">+ Log Global Pick</span>
+    </button>
+  </div>
+  <div class="card"> style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted);"></span></div>
     <div class="sw"><table class="dt"><thead><tr>
       <th style="width:42px">Bet No.</th>
       <th style="width:28px"></th>
@@ -3286,6 +3304,68 @@ function rGlobal(){
   }).join('');
 }
 
+function updateGlobalPickLogo(){
+  const tx = document.getElementById('gl-tx')?.value.trim().toUpperCase();
+  const logo = document.getElementById('gl-pick-logo');
+  if(!logo) return;
+  if(tx){ logo.src = teamLogo(tx); logo.style.display = 'inline-block'; }
+  else { logo.style.display = 'none'; }
+}
+
+function autoCalcGlobalEdge(){
+  const od = parseFloat(document.getElementById('gl-od')?.value);
+  const xwp = parseFloat(document.getElementById('gl-xwp')?.value);
+  const edEl = document.getElementById('gl-ed');
+  if(!edEl) return;
+  if(!isNaN(od) && !isNaN(xwp) && xwp > 0){
+    const imp = od >= 0 ? 100/(od+100) : Math.abs(od)/(Math.abs(od)+100);
+    edEl.value = ((xwp/100 - imp)*100).toFixed(2);
+  } else {
+    edEl.value = '';
+  }
+}
+
+function addGlobalPick(){
+  const dt  = document.getElementById('gl-dt').value;
+  const gt  = document.getElementById('gl-gt').value.trim();
+  const tx  = document.getElementById('gl-tx').value.trim().toUpperCase();
+  const opp = document.getElementById('gl-opp').value.trim().toUpperCase();
+  const ha  = document.getElementById('gl-ha').textContent.trim();
+  const od  = parseFloat(document.getElementById('gl-od').value);
+  const xwp = parseFloat(document.getElementById('gl-xwp').value) || 0;
+  const ed  = parseFloat(document.getElementById('gl-ed').value) || 0;
+  const rs  = document.getElementById('gl-rs').value;
+  if(!dt || !tx || isNaN(od)){ toast('Fill date, pick, and odds.', 'err'); return; }
+  const [y,m,d] = dt.split('-');
+  const dateMDY = `${m}/${d}/${y}`;
+  const tp = new Date().toLocaleString('en-US',{month:'2-digit',day:'2-digit',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true});
+  const un = od < 0 ? +(Math.abs(od)/100).toFixed(2) : 1;
+  const newPick = {
+    id: Date.now() + Math.random(),
+    dt: dateMDY, gt, tp,
+    tx, opp, ha,
+    od, xwp, ed,
+    un, rs,
+    uw: calcWon(od, un, rs),
+    ku: 0, kuw: 0,
+  };
+  // Dedup check
+  if(S.global.find(o => o.tx === newPick.tx && o.dt === newPick.dt)){
+    toast(`${tx} already logged for ${dateMDY}`, 'err'); return;
+  }
+  S.global.push(newPick);
+  saveGlobalToFirebase(newPick);
+  logActivity(`Global manual: ${tx} ${od>0?'+':''}${od} vs ${opp} (${dateMDY})`, tx, 'bets');
+  localStorage.setItem('mlb26v3', JSON.stringify(S));
+  rGlobal();
+  // Reset form
+  ['gl-tx','gl-opp','gl-od','gl-xwp','gl-ed','gl-gt'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('gl-ha').textContent = 'vs';
+  document.getElementById('gl-rs').value = 'Pending';
+  document.getElementById('gl-pick-logo').style.display = 'none';
+  toast('Global pick logged!');
+}
+
 function delGlobal(id){
   const dp = S.global.find(p => p.id === id);
   if(dp) logActivity(`Global deleted: ${dp.tx} ${dp.od>0?'+':''}${dp.od} vs ${dp.opp} (${fmtDt(dp.dt)})`, dp.tx, 'bets');
@@ -4404,7 +4484,13 @@ function showPanel(name,btn){
   if(name==='games')rGames();
   if(name==='kelly-tracker'){renderKellyTracker();}
   if(name==='overnights'){initOvernightDate();rOvernights();}
-  if(name==='global'){initGlobalDate();rGlobal();}
+  if(name==='global'){
+    initGlobalDate();
+    rGlobal();
+    // Pre-fill manual log date to today
+    const glDt = document.getElementById('gl-dt');
+    if(glDt && !glDt.value) glDt.value = new Date().toISOString().slice(0,10);
+  }
   if(name==='perf'){ setPerfSource(_perfSource); rPerf(); }
   if(name==='teams'){initTeamBtns();renderTeam(currentTeam);}
   if(name==='proj-h')rProjH();
