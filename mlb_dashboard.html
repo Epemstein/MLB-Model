@@ -3278,28 +3278,45 @@ function rGlobal(){
   document.getElementById('gl-ct').textContent = S.global.length + ' bet' + (S.global.length !== 1 ? 's' : '');
   if(!S.global.length){ b.innerHTML = '<tr><td colspan="15" class="nd">No global picks yet.</td></tr>'; return; }
 
-  // Sort by date then by id (insertion order within same date)
-  const sorted = [...S.global].sort((a, b) => {
+  // Always sort chronologically: date ASC, then game time ASC within same date
+  function parseGameTime(gt){
+    // Convert "7:05 PM ET" → minutes since midnight for comparison
+    if(!gt) return 9999;
+    const m = gt.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if(!m) return 9999;
+    let h = parseInt(m[1]), min = parseInt(m[2]), ap = m[3].toUpperCase();
+    if(ap === 'PM' && h !== 12) h += 12;
+    if(ap === 'AM' && h === 12) h = 0;
+    return h * 60 + min;
+  }
+  const chronological = [...S.global].sort((a, b) => {
     const ay = a.dt && a.dt.includes('/') ? dateToYMD(a.dt) : (a.dt||'');
-    const by = b.dt && b.dt.includes('/') ? dateToYMD(b.dt) : (b.dt||'');
-    if(ay !== by) return _globalSortAsc ? ay.localeCompare(by) : by.localeCompare(ay);
-    return _globalSortAsc ? a.id - b.id : b.id - a.id;
+    const by2 = b.dt && b.dt.includes('/') ? dateToYMD(b.dt) : (b.dt||'');
+    if(ay !== by2) return ay.localeCompare(by2);
+    return parseGameTime(a.gt) - parseGameTime(b.gt);
   });
 
+  // Running total always calculated in chronological order
   let fwdRun = 0;
-  const runningTotals = sorted.map(p => {
+  const runMap = {};
+  chronological.forEach(p => {
     if(p.rs !== 'Pending') fwdRun += p.uw;
-    return { run: fwdRun };
+    runMap[p.id] = fwdRun;
   });
 
-  b.innerHTML = sorted.map((p,i) => ({p, rt:runningTotals[i]})).map(({p,rt},i) => {
-    const run = rt.run;
+  // Display order: newest first (desc) or oldest first (asc)
+  const sorted = _globalSortAsc ? chronological : [...chronological].reverse();
+  const total = S.global.length;
+
+  b.innerHTML = sorted.map((p, i) => {
+    const run = runMap[p.id];
     const rc = run >= 0 ? 'var(--green)' : 'var(--red)';
     const wonStr = p.rs === 'Pending' ? '—' : (p.uw >= 0 ? '+' : '') + p.uw.toFixed(2) + 'u';
     const runStr = p.rs === 'Pending' ? '—' : (run >= 0 ? '+' : '') + run.toFixed(2) + 'u';
     const wc = p.uw > 0 ? 'var(--green)' : p.uw < 0 ? 'var(--red)' : 'var(--muted)';
+    const betNo = _globalSortAsc ? (i + 1) : (total - i);
     return `<tr>
-      <td style="color:var(--muted);text-align:center">${_globalSortAsc ? i+1 : S.global.length - i}</td>
+      <td style="color:var(--muted);text-align:center">${betNo}</td>
       <td style="text-align:center"><button class="btn bg" style="padding:2px 6px;font-size:9px;" onclick="event.stopPropagation();openEditPick(${p.id},'global')">✎</button></td>
       <td style="color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${p.tp||'—'}</td>
       <td style="white-space:nowrap;font-size:11px">${fmtDtFull(p.dt)}</td>
