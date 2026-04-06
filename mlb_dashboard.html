@@ -3607,18 +3607,23 @@ async function exportOddsPDF(){
           ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#e65100;margin-left:4px;vertical-align:middle;"></span>'
           : '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#ccc;margin-left:4px;vertical-align:middle;"></span>';
 
-      const oddsCell = od => od != null ? `<td>${od>0?'+':''}${od}</td>` : `<td style="color:#ccc">—</td>`;
-      const pctCell = p => p != null ? `<td>${(p*100).toFixed(1)}%</td>` : `<td style="color:#ccc">—</td>`;
+      const odCell = od => od != null ? `<td style="text-align:right">${od>0?'+':''}${od}</td>` : `<td style="color:#ccc;text-align:right">—</td>`;
+      const pctCell = p => p != null ? `<td style="text-align:right">${(p*100).toFixed(1)}%</td>` : `<td style="color:#ccc;text-align:right">—</td>`;
       const edgeCell = edge => {
-        if(edge == null) return `<td style="color:#ccc">—</td>`;
-        const c = edge >= 3 ? '#2e7d32' : edge > 0 ? '#555' : '#c62828';
+        if(edge == null) return `<td style="color:#ccc;text-align:right">—</td>`;
+        const c = edge > 0 ? '#2e7d32' : '#c62828';
         const w = Math.abs(edge) >= 3 ? 'bold' : 'normal';
-        return `<td style="color:${c};font-weight:${w}">${edge>=0?'+':''}${edge.toFixed(2)}%</td>`;
+        return `<td style="color:${c};font-weight:${w};text-align:right">${edge>=0?'+':''}${edge.toFixed(2)}%</td>`;
       };
 
       const awBg = awEdge != null && awEdge >= 3 ? 'background:#f0faf0;' : '';
       const hwBg = hwEdge != null && hwEdge >= 3 ? 'background:#f0faf0;' : '';
       const gameTime = r.gameTime || '';
+      const logo = (t) => `<img src="https://epemstein.github.io/MLB-Model/logos/${t}.png" width="14" height="14" style="object-fit:contain;vertical-align:middle;margin-right:4px;" onerror="this.style.display='none'" />`;
+
+      // BO odds: show away/home stacked in one cell using rowspan
+      const awBOStr = awBO != null ? `${awBO>0?'+':''}${awBO}` : '—';
+      const hwBOStr = hwBO != null ? `${hwBO>0?'+':''}${hwBO}` : '—';
 
       rows += `
         <tr style="border-top:3px solid #e8eaed;">
@@ -3626,21 +3631,24 @@ async function exportOddsPDF(){
             <strong style="color:#222">${g.away} @ ${g.home}</strong>${dot}<br>
             <span style="color:#999">${gameTime}</span>
           </td>
-          <td style="${awBg}font-weight:600">${g.away}</td>
-          ${oddsCell(awBO)}
-          <td>${(awMdlWP*100).toFixed(1)}%</td>
+          <td style="${awBg}font-weight:600;vertical-align:middle;">${logo(g.away)}${g.away}</td>
+          <td rowspan="2" style="text-align:right;vertical-align:middle;font-family:monospace;">
+            <span style="display:block;${awBg}padding:2px 0">${awBOStr}</span>
+            <span style="display:block;${hwBg}padding:2px 0">${hwBOStr}</span>
+          </td>
           ${pctCell(awMktWP)}
+          <td style="text-align:right">${(awMdlWP*100).toFixed(1)}%</td>
           ${edgeCell(awEdge)}
         </tr>
         <tr>
-          <td style="${hwBg}font-weight:600">${g.home}</td>
-          ${oddsCell(hwBO)}
-          <td>${(hwMdlWP*100).toFixed(1)}%</td>
+          <td style="${hwBg}font-weight:600;vertical-align:middle;">${logo(g.home)}${g.home}</td>
           ${pctCell(hwMktWP)}
+          <td style="text-align:right">${(hwMdlWP*100).toFixed(1)}%</td>
           ${edgeCell(hwEdge)}
         </tr>`;
     }
 
+    
     const exportHTML = `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <style>
@@ -3666,8 +3674,8 @@ async function exportOddsPDF(){
       <th style="width:18%;text-align:left">Game</th>
       <th style="width:9%;text-align:left">Team</th>
       <th style="width:11%">BetOnline</th>
-      <th style="width:13%">Model Win%</th>
       <th style="width:13%">Market Win%</th>
+      <th style="width:13%">Model Win%</th>
       <th style="width:11%">Edge</th>
     </tr></thead>
     <tbody>${rows}</tbody>
