@@ -805,6 +805,7 @@ input[type=number] { -moz-appearance:textfield; }
         <div id="odds-table-hdr" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border);">
           <span onclick="toggleOddsTable()" style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);cursor:pointer;user-select:none;">Odds Summary</span>
           <div style="display:flex;align-items:center;gap:8px;">
+            <button onclick="exportOddsPDF()" style="padding:3px 9px;font-size:10px;background:transparent;border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--muted);font-weight:600;" title="Export odds table as PDF">⬇ PDF</button>
             <button id="odds-refresh-btn" onclick="refreshOddsOnly()" style="padding:3px 9px;font-size:10px;background:transparent;border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--accent);font-weight:600;" title="Refresh NoVig odds without re-fetching games">⟳ Odds</button>
             <span id="odds-toggle-icon" onclick="toggleOddsTable()" style="font-size:11px;color:var(--muted);cursor:pointer;user-select:none;">▾</span>
           </div>
@@ -1340,6 +1341,8 @@ input[type=number] { -moz-appearance:textfield; }
 </main>
 <div class="toast" id="toast"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 // ═══════════════════════════════════════════════
 // TEAM DATA (from spreadsheet)
@@ -3574,6 +3577,94 @@ function rPerfTable(picks){
 // ODDS TABLE (Change 5)
 // ═══════════════════════════════════════════════
 let oddsTableOpen = true;
+async function exportOddsPDF(){
+  const table = document.getElementById('odds-summary-table');
+  if(!table){ toast('No odds table to export', 'err'); return; }
+
+  toast('Generating PDF…');
+
+  // Temporarily remove max-height so full table renders
+  const body = document.getElementById('odds-table-body');
+  const prevMax = body.style.maxHeight;
+  const prevOverflow = body.style.overflow;
+  body.style.maxHeight = 'none';
+  body.style.overflow = 'visible';
+
+  try {
+    const canvas = await html2canvas(table, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+    });
+
+    const imgW = 297; // A4 landscape width in mm
+    const margin = 10;
+    const usableW = imgW - margin * 2;
+    const ratio = canvas.height / canvas.width;
+    const imgH = usableW * ratio;
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: imgH > (210 - margin*2) ? 'portrait' : 'landscape', unit: 'mm', format: 'a4' });
+
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const finalW = pageW - margin * 2;
+    const finalH = finalW * ratio;
+
+    // Add title + date
+    const date = document.getElementById('active-date')?.textContent || new Date().toLocaleDateString('en-US');
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(`MLB Algo — Odds Summary`, margin, margin - 2);
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(120);
+    pdf.text(date, margin, margin + 2);
+    pdf.setTextColor(0);
+
+    const imgData = canvas.toDataURL('image/png');
+
+    // If table is taller than one page, split across pages
+    const startY = margin + 6;
+    const availH = pageH - startY - margin;
+
+    if(finalH <= availH){
+      pdf.addImage(imgData, 'PNG', margin, startY, finalW, finalH);
+    } else {
+      // Multi-page: slice canvas into page-height chunks
+      const rowH = availH; // mm per page
+      const pxPerMm = canvas.width / finalW;
+      const pxRowH = rowH * pxPerMm;
+      let srcY = 0;
+      let pageNum = 0;
+      while(srcY < canvas.height){
+        if(pageNum > 0){ pdf.addPage(); srcY += 0; } // addPage resets
+        const sliceH = Math.min(pxRowH, canvas.height - srcY);
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = sliceH;
+        sliceCanvas.getContext('2d').drawImage(canvas, 0, srcY, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+        const sliceData = sliceCanvas.toDataURL('image/png');
+        const sliceMmH = sliceH / pxPerMm;
+        pdf.addImage(sliceData, 'PNG', margin, pageNum === 0 ? startY : margin, finalW, sliceMmH);
+        srcY += sliceH;
+        pageNum++;
+      }
+    }
+
+    const filename = `odds_${new Date().toISOString().slice(0,10)}.pdf`;
+    pdf.save(filename);
+    toast('PDF downloaded ✓');
+  } catch(e){
+    console.error('PDF export failed:', e);
+    toast('PDF export failed: ' + e.message, 'err');
+  } finally {
+    body.style.maxHeight = prevMax;
+    body.style.overflow = prevOverflow;
+  }
+}
+
 function toggleOddsTable(){
   oddsTableOpen = !oddsTableOpen;
   document.getElementById('odds-table-body').style.display = oddsTableOpen ? '' : 'none';
