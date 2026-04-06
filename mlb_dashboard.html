@@ -3578,92 +3578,147 @@ function rPerfTable(picks){
 // ═══════════════════════════════════════════════
 let oddsTableOpen = true;
 async function exportOddsPDF(){
-  const table = document.getElementById('odds-summary-table');
-  if(!table){ toast('No odds table to export', 'err'); return; }
-
+  if(!S.games || !S.games.length){ toast('No games loaded', 'err'); return; }
   toast('Generating PDF…');
 
-  // Temporarily remove max-height so full table renders
-  const body = document.getElementById('odds-table-body');
-  const prevMax = body.style.maxHeight;
-  const prevOverflow = body.style.overflow;
-  body.style.maxHeight = 'none';
-  body.style.overflow = 'visible';
-
   try {
-    const canvas = await html2canvas(table, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: '#ffffff',
-      logging: false,
-    });
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+    const dateStr = now.toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'numeric'});
+    const title = `MLB Model Odds  |  ${dateStr}  |  Generated at ${timeStr}`;
 
-    const imgW = 297; // A4 landscape width in mm
-    const margin = 10;
-    const usableW = imgW - margin * 2;
-    const ratio = canvas.height / canvas.width;
-    const imgH = usableW * ratio;
+    const calcs = S.games.map(g => ({g, r: modelCalc(g)})).filter(({r}) => r);
+    const n = v => (typeof v==='number'&&!isNaN(v))?v:0;
 
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: imgH > (210 - margin*2) ? 'portrait' : 'landscape', unit: 'mm', format: 'a4' });
+    let rows = '';
+    for(const {g, r} of calcs){
+      const awBO = g.awayBO || null;
+      const hwBO = g.homeBO || null;
+      const awMktWP = awBO != null ? impl(awBO) : null;
+      const hwMktWP = hwBO != null ? impl(hwBO) : null;
+      const awMdlWP = n(r.awWP);
+      const hwMdlWP = n(r.hwWP);
+      const awEdge = awBO != null ? (awMdlWP - awMktWP) * 100 : null;
+      const hwEdge = hwBO != null ? (hwMdlWP - hwMktWP) * 100 : null;
 
-    const pageW = pdf.internal.pageSize.getWidth();
-    const pageH = pdf.internal.pageSize.getHeight();
-    const finalW = pageW - margin * 2;
-    const finalH = finalW * ratio;
+      const dot = g.hasLineup
+        ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#2e7d32;margin-left:4px;vertical-align:middle;"></span>'
+        : g.hasBMLineup
+          ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#e65100;margin-left:4px;vertical-align:middle;"></span>'
+          : '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#ccc;margin-left:4px;vertical-align:middle;"></span>';
 
-    // Add title + date
-    const date = document.getElementById('active-date')?.textContent || new Date().toLocaleDateString('en-US');
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text(`MLB Algo — Odds Summary`, margin, margin - 2);
-    pdf.setFontSize(9);
-    pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(120);
-    pdf.text(date, margin, margin + 2);
-    pdf.setTextColor(0);
+      const oddsCell = od => od != null ? `<td>${od>0?'+':''}${od}</td>` : `<td style="color:#ccc">—</td>`;
+      const pctCell = p => p != null ? `<td>${(p*100).toFixed(1)}%</td>` : `<td style="color:#ccc">—</td>`;
+      const edgeCell = edge => {
+        if(edge == null) return `<td style="color:#ccc">—</td>`;
+        const c = edge >= 3 ? '#2e7d32' : edge > 0 ? '#555' : '#c62828';
+        const w = Math.abs(edge) >= 3 ? 'bold' : 'normal';
+        return `<td style="color:${c};font-weight:${w}">${edge>=0?'+':''}${edge.toFixed(2)}%</td>`;
+      };
 
-    const imgData = canvas.toDataURL('image/png');
+      const awBg = awEdge != null && awEdge >= 3 ? 'background:#f0faf0;' : '';
+      const hwBg = hwEdge != null && hwEdge >= 3 ? 'background:#f0faf0;' : '';
+      const gameTime = r.gameTime || '';
 
-    // If table is taller than one page, split across pages
-    const startY = margin + 6;
-    const availH = pageH - startY - margin;
-
-    if(finalH <= availH){
-      pdf.addImage(imgData, 'PNG', margin, startY, finalW, finalH);
-    } else {
-      // Multi-page: slice canvas into page-height chunks
-      const rowH = availH; // mm per page
-      const pxPerMm = canvas.width / finalW;
-      const pxRowH = rowH * pxPerMm;
-      let srcY = 0;
-      let pageNum = 0;
-      while(srcY < canvas.height){
-        if(pageNum > 0){ pdf.addPage(); srcY += 0; } // addPage resets
-        const sliceH = Math.min(pxRowH, canvas.height - srcY);
-        const sliceCanvas = document.createElement('canvas');
-        sliceCanvas.width = canvas.width;
-        sliceCanvas.height = sliceH;
-        sliceCanvas.getContext('2d').drawImage(canvas, 0, srcY, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-        const sliceData = sliceCanvas.toDataURL('image/png');
-        const sliceMmH = sliceH / pxPerMm;
-        pdf.addImage(sliceData, 'PNG', margin, pageNum === 0 ? startY : margin, finalW, sliceMmH);
-        srcY += sliceH;
-        pageNum++;
-      }
+      rows += `
+        <tr style="border-top:3px solid #e8eaed;">
+          <td rowspan="2" style="color:#666;font-size:10px;vertical-align:middle;white-space:nowrap;padding-right:6px;">
+            <strong style="color:#222">${g.away} @ ${g.home}</strong>${dot}<br>
+            <span style="color:#999">${gameTime}</span>
+          </td>
+          <td style="${awBg}font-weight:600">${g.away}</td>
+          ${oddsCell(awBO)}
+          <td>${(awMdlWP*100).toFixed(1)}%</td>
+          ${pctCell(awMktWP)}
+          ${edgeCell(awEdge)}
+        </tr>
+        <tr>
+          <td style="${hwBg}font-weight:600">${g.home}</td>
+          ${oddsCell(hwBO)}
+          <td>${(hwMdlWP*100).toFixed(1)}%</td>
+          ${pctCell(hwMktWP)}
+          ${edgeCell(hwEdge)}
+        </tr>`;
     }
 
-    const filename = `odds_${new Date().toISOString().slice(0,10)}.pdf`;
-    pdf.save(filename);
+    const exportHTML = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  body { font-family: Calibri, Arial, sans-serif; font-size: 11px; color: #222; margin: 0; padding: 16px; }
+  h2 { font-size: 13px; font-weight: 700; margin: 0 0 2px 0; }
+  .subtitle { font-size: 10px; color: #666; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing:.05em;
+       color:#888; text-align:right; padding:4px 6px; border-bottom:2px solid #ddd; }
+  th:first-child, th:nth-child(2) { text-align:left; }
+  td { padding:5px 6px; text-align:right; vertical-align:middle; }
+  td:first-child { text-align:left; }
+  td:nth-child(2) { text-align:left; }
+  tr:last-child td { border-bottom:1px solid #eee; }
+  .key { margin-top:10px; font-size:9px; color:#666; display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+  .dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:3px; vertical-align:middle; }
+</style>
+</head><body>
+  <h2>MLB Model Odds</h2>
+  <div class="subtitle">${title}</div>
+  <table>
+    <thead><tr>
+      <th style="width:18%;text-align:left">Game</th>
+      <th style="width:9%;text-align:left">Team</th>
+      <th style="width:11%">BetOnline</th>
+      <th style="width:13%">Model Win%</th>
+      <th style="width:13%">Market Win%</th>
+      <th style="width:11%">Edge</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="key">
+    <span><span class="dot" style="background:#2e7d32"></span>Lineup Confirmed</span>
+    <span><span class="dot" style="background:#e65100"></span>FG Projected</span>
+    <span><span class="dot" style="background:#ccc"></span>Lineups Unavailable</span>
+    <span style="color:#2e7d32;font-weight:bold">Green = Edge ≥ 3%</span>
+    <span style="color:#555">Edge = Model W% − Market W%</span>
+  </div>
+</body></html>`;
+
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:900px;height:1px;border:none;';
+    document.body.appendChild(iframe);
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(exportHTML);
+    iframe.contentDocument.close();
+    await new Promise(r => setTimeout(r, 400));
+    const docH = iframe.contentDocument.body.scrollHeight;
+    iframe.style.height = docH + 'px';
+    await new Promise(r => setTimeout(r, 100));
+
+    const canvas = await html2canvas(iframe.contentDocument.body, {
+      scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false,
+      width: 900, height: docH,
+    });
+    document.body.removeChild(iframe);
+
+    const { jsPDF } = window.jspdf;
+    const margin = 10;
+    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const usableW = pageW - margin * 2;
+    const usableH = pageH - margin * 2;
+    const ratio = canvas.height / canvas.width;
+    let imgW = usableW, imgH = imgW * ratio;
+    if(imgH > usableH){ imgH = usableH; imgW = imgH / ratio; }
+    const x = margin + (usableW - imgW) / 2;
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', x, margin, imgW, imgH);
+
+    pdf.save(`mlb_odds_${now.toISOString().slice(0,10)}.pdf`);
     toast('PDF downloaded ✓');
   } catch(e){
     console.error('PDF export failed:', e);
     toast('PDF export failed: ' + e.message, 'err');
-  } finally {
-    body.style.maxHeight = prevMax;
-    body.style.overflow = prevOverflow;
   }
 }
+
 
 function toggleOddsTable(){
   oddsTableOpen = !oddsTableOpen;
