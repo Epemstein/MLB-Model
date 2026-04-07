@@ -4428,8 +4428,8 @@ function rCharts(picks){
     gradAbove.addColorStop(0, isPos?'rgba(0,230,118,0.25)':'rgba(255,82,82,0.25)');
     gradAbove.addColorStop(1, 'rgba(0,0,0,0)');
     const gradBelow = ctx2d.createLinearGradient(0,0,0,plEl.offsetHeight||240);
-    gradBelow.addColorStop(0, 'rgba(0,0,0,0)');
-    gradBelow.addColorStop(1, isPos?'rgba(255,82,82,0.15)':'rgba(255,82,82,0.25)');
+    gradBelow.addColorStop(0, 'rgba(255,59,48,0.0)');
+    gradBelow.addColorStop(1, 'rgba(255,59,48,0.45)');
 
     CH.pl = new Chart(plEl, {
       type: 'line',
@@ -4449,7 +4449,7 @@ function rCharts(picks){
           },
           pointBorderColor: '#0f1117',
           pointBorderWidth: 1.5,
-          tension: 0.35,
+          tension: 0,
           fill: { target: {value:0}, above: gradAbove, below: gradBelow },
         }]
       },
@@ -4474,7 +4474,10 @@ function rCharts(picks){
         },
         scales: {
           x: { type:'linear', grid:{color:'rgba(255,255,255,0.05)'}, ticks:{color:'#555',font:{size:10}}, border:{color:'#1e2130'} },
-          y: { grid:{color:'rgba(255,255,255,0.05)'}, ticks:{color:'#555',font:{size:10},callback:yTickCb}, border:{color:'#1e2130'} }
+          y: { grid:{color:'rgba(255,255,255,0.05)',lineWidth:1,
+               color(ctx){ return ctx.tick.value===0 ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.05)'; },
+               lineWidth(ctx){ return ctx.tick.value===0 ? 1.5 : 1; }},
+               ticks:{color(ctx){ return ctx.tick.value===0?'#aaa':'#555';},font:{size:10},callback:yTickCb}, border:{color:'#1e2130'} }
         }
       },
       plugins: [{
@@ -4557,7 +4560,6 @@ function rCharts(picks){
       if(!teamStats[t]) teamStats[t] = { play:{w:0,l:0,pnl:0}, fade:{w:0,l:0,pnl:0} };
     });
     const teams = Object.keys(teamStats).sort((a,b) => {
-      // Sort by total P&L descending; unbetted teams fall to bottom
       const ap = teamStats[a].play.pnl + teamStats[a].fade.pnl;
       const bp = teamStats[b].play.pnl + teamStats[b].fade.pnl;
       const aGames = teamStats[a].play.w+teamStats[a].play.l+teamStats[a].fade.w+teamStats[a].fade.l;
