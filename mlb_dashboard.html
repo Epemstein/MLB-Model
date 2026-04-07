@@ -980,9 +980,9 @@ input[type=number] { -moz-appearance:textfield; }
     <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;">
 
       <!-- P/L Curve -->
-      <div class="card">
-        <div class="ct">P/L Curve
-          <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:400;" id="pl-curve-label"></span>
+      <div class="card" id="pl-curve-card" style="background:#0f1117;border-color:#1e2130;">
+        <div class="ct" style="color:#e0e0e0;border-bottom-color:#1e2130;">P/L Curve
+          <span style="margin-left:auto;font-size:10px;color:#666;font-weight:400;" id="pl-curve-label"></span>
         </div>
         <div class="cw"><canvas id="ch-pl"></canvas></div>
       </div>
@@ -4393,28 +4393,123 @@ function rCharts(picks){
   const isKelly = _perfMode === 'kelly' && _perfSource === 'picks';
   const res = picks.filter(p => p.rs !== 'Pending');
 
-  // ── P/L Curve ──
+  // ── P/L Curve — dark card, gradient fill, glow, annotations ──
   if(CH.pl) CH.pl.destroy();
   const plEl = document.getElementById('ch-pl');
   if(plEl){
+    // Build data series
+    let plD, finalVal, yTickCb;
     if(isKelly){
-      // Kelly $ P&L curve
-      let runDollars = 0;
-      const plD = [{x:0, y:0}];
-      res.forEach((p,i) => { runDollars += pickKellyPnl(p); plD.push({x:i+1, y:+runDollars.toFixed(2)}); });
-      const plColor = (plD.at(-1)?.y||0) >= 0 ? '#2e7d32' : '#c62828';
+      let run = 0; plD = [{x:0,y:0}];
+      res.forEach((p,i)=>{ run += pickKellyPnl(p); plD.push({x:i+1,y:+run.toFixed(2)}); });
+      yTickCb = v => (v>=0?'+$':'-$')+Math.abs(v).toLocaleString();
       const lbl = document.getElementById('pl-curve-label');
       if(lbl) lbl.textContent = 'Kelly $';
-      CH.pl = new Chart(plEl, {type:'line',data:{datasets:[{data:plD,borderColor:plColor,backgroundColor:'transparent',borderWidth:2,pointRadius:res.length<=40?3:0,tension:.2,fill:{target:{value:0},above:'rgba(46,125,50,.08)',below:'rgba(198,40,40,.08)'}}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{type:'linear',grid:{color:'#f0f0f0'}},y:{grid:{color:'#f0f0f0'},ticks:{callback:v=>(v>=0?'+$':'-$')+Math.abs(v).toLocaleString()}}}}});
     } else {
-      // Flat units curve
-      let run=0; const plD=[{x:0,y:0}];
-      res.forEach((p,i)=>{run+=p.uw;plD.push({x:i+1,y:+run.toFixed(3)});});
-      const plColor=(plD.at(-1)?.y||0)>=0?'#2e7d32':'#c62828';
+      let run = 0; plD = [{x:0,y:0}];
+      res.forEach((p,i)=>{ run += p.uw; plD.push({x:i+1,y:+run.toFixed(3)}); });
+      yTickCb = v => (v>=0?'+':'')+v+'u';
       const lbl = document.getElementById('pl-curve-label');
       if(lbl) lbl.textContent = 'Flat Units';
-      CH.pl = new Chart(plEl, {type:'line',data:{datasets:[{data:plD,borderColor:plColor,backgroundColor:'transparent',borderWidth:2,pointRadius:res.length<=40?3:0,tension:.2,fill:{target:{value:0},above:'rgba(46,125,50,.08)',below:'rgba(198,40,40,.08)'}}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{type:'linear',grid:{color:'#f0f0f0'}},y:{grid:{color:'#f0f0f0'},ticks:{callback:v=>(v>=0?'+':'')+v+'u'}}}}});
     }
+
+    finalVal = plD.at(-1)?.y || 0;
+    const isPos = finalVal >= 0;
+    const lineColor   = isPos ? '#00e676' : '#ff5252';
+    const glowColor   = isPos ? 'rgba(0,230,118,0.4)' : 'rgba(255,82,82,0.4)';
+
+    // Find peak, trough, max drawdown
+    let peak = -Infinity, trough = Infinity, peakIdx = 0, troughIdx = 0;
+    plD.forEach((pt,i)=>{ if(pt.y>peak){peak=pt.y;peakIdx=i;} if(pt.y<trough){trough=pt.y;troughIdx=i;} });
+
+    // Gradient fill using canvas gradient
+    const ctx2d = plEl.getContext('2d');
+    const gradAbove = ctx2d.createLinearGradient(0,0,0,plEl.offsetHeight||240);
+    gradAbove.addColorStop(0, isPos?'rgba(0,230,118,0.25)':'rgba(255,82,82,0.25)');
+    gradAbove.addColorStop(1, 'rgba(0,0,0,0)');
+    const gradBelow = ctx2d.createLinearGradient(0,0,0,plEl.offsetHeight||240);
+    gradBelow.addColorStop(0, 'rgba(0,0,0,0)');
+    gradBelow.addColorStop(1, isPos?'rgba(255,82,82,0.15)':'rgba(255,82,82,0.25)');
+
+    CH.pl = new Chart(plEl, {
+      type: 'line',
+      data: {
+        datasets: [{
+          data: plD,
+          borderColor: lineColor,
+          borderWidth: 2.5,
+          backgroundColor: gradAbove,
+          pointRadius: (ctx) => {
+            const i = ctx.dataIndex;
+            return (i===peakIdx||i===troughIdx||i===plD.length-1) ? 5 : (plD.length<=40?2.5:0);
+          },
+          pointBackgroundColor: (ctx) => {
+            const i = ctx.dataIndex, y = plD[i]?.y||0;
+            return i===peakIdx ? '#00e676' : i===troughIdx ? '#ff5252' : lineColor;
+          },
+          pointBorderColor: '#0f1117',
+          pointBorderWidth: 1.5,
+          tension: 0.35,
+          fill: { target: {value:0}, above: gradAbove, below: gradBelow },
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 600, easing: 'easeInOutQuart' },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(15,17,23,0.95)',
+            borderColor: '#333',
+            borderWidth: 1,
+            titleColor: '#888',
+            bodyColor: '#fff',
+            callbacks: {
+              title: (items) => `Bet #${items[0].raw.x}`,
+              label: (item) => ' ' + yTickCb(item.raw.y),
+            }
+          },
+          // Annotations: peak, trough, current via custom afterDraw
+        },
+        scales: {
+          x: { type:'linear', grid:{color:'rgba(255,255,255,0.05)'}, ticks:{color:'#555',font:{size:10}}, border:{color:'#1e2130'} },
+          y: { grid:{color:'rgba(255,255,255,0.05)'}, ticks:{color:'#555',font:{size:10},callback:yTickCb}, border:{color:'#1e2130'} }
+        }
+      },
+      plugins: [{
+        id: 'glowLine',
+        beforeDraw(chart){
+          const ctx = chart.ctx;
+          ctx.save();
+          ctx.shadowColor = glowColor;
+          ctx.shadowBlur = 12;
+        },
+        afterDraw(chart){ chart.ctx.restore(); },
+      }, {
+        id: 'annotations',
+        afterDraw(chart){
+          const ctx = chart.ctx;
+          const ds = chart.getDatasetMeta(0);
+          const drawLabel = (ptIdx, label, color) => {
+            const pt = ds.data[ptIdx];
+            if(!pt) return;
+            ctx.save();
+            ctx.fillStyle = color;
+            ctx.font = 'bold 9px Calibri,sans-serif';
+            ctx.textAlign = 'center';
+            const y = ptIdx===troughIdx ? pt.y+14 : pt.y-10;
+            ctx.fillText(label, pt.x, y);
+            ctx.restore();
+          };
+          drawLabel(peakIdx,   '▲ '+yTickCb(peak),   '#00e676');
+          drawLabel(troughIdx, '▼ '+yTickCb(trough),  '#ff5252');
+          if(plD.length-1!==peakIdx && plD.length-1!==troughIdx){
+            drawLabel(plD.length-1, yTickCb(finalVal), lineColor);
+          }
+        }
+      }]
+    });
   }
 
   // ── Right chart: Edge Distribution or Team Record ──
@@ -4457,10 +4552,19 @@ function rCharts(picks){
       if(p.opp) addStat(p.opp, 'fade', p); // team we bet AGAINST
     });
 
+    // Include ALL 30 MLB teams — zero entries for unbetted teams
+    TEAM_ORDER.forEach(t => {
+      if(!teamStats[t]) teamStats[t] = { play:{w:0,l:0,pnl:0}, fade:{w:0,l:0,pnl:0} };
+    });
     const teams = Object.keys(teamStats).sort((a,b) => {
-      // Sort by total P&L descending
+      // Sort by total P&L descending; unbetted teams fall to bottom
       const ap = teamStats[a].play.pnl + teamStats[a].fade.pnl;
       const bp = teamStats[b].play.pnl + teamStats[b].fade.pnl;
+      const aGames = teamStats[a].play.w+teamStats[a].play.l+teamStats[a].fade.w+teamStats[a].fade.l;
+      const bGames = teamStats[b].play.w+teamStats[b].play.l+teamStats[b].fade.w+teamStats[b].fade.l;
+      if(aGames === 0 && bGames === 0) return a.localeCompare(b);
+      if(aGames === 0) return 1;
+      if(bGames === 0) return -1;
       return bp - ap;
     });
 
@@ -4485,7 +4589,12 @@ function rCharts(picks){
         : `${tpnl>=0?'+':''}${tpnl.toFixed(2)}u`;
       const tc = tpnl > 0 ? 'var(--green)' : tpnl < 0 ? 'var(--red)' : 'var(--muted)';
       const isSelected = _perfTeamFilter === t;
-      const rowBg = isSelected ? 'background:rgba(26,111,181,.08);' : '';
+      const tpnlForBg = teamStats[t].play.pnl + teamStats[t].fade.pnl;
+      const aGames = teamStats[t].play.w+teamStats[t].play.l+teamStats[t].fade.w+teamStats[t].fade.l;
+      let rowBg = '';
+      if(isSelected) rowBg = 'background:rgba(26,111,181,.10);';
+      else if(aGames > 0 && tpnlForBg > 0) rowBg = 'background:rgba(46,125,50,.04);';
+      else if(aGames > 0 && tpnlForBg < 0) rowBg = 'background:rgba(198,40,40,.04);';
       return `<tr data-team-filter="${t}" onclick="setPerfTeamFilter('${t}')"
         style="border-bottom:1px solid var(--border);cursor:pointer;${rowBg}transition:background .15s;">
         <td style="padding:4px 6px;white-space:nowrap">
