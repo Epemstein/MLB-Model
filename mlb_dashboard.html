@@ -993,9 +993,9 @@ input[type=number] { -moz-appearance:textfield; }
           <button id="ch-right-btn-team" onclick="setRightChart('team')" style="padding:2px 8px;background:var(--surface);color:var(--muted);border:none;cursor:pointer;">Team Record</button>
         </div>
       </div>
-      <div class="cw" style="height:160px;">
+      <div class="cw" style="height:160px;overflow-y:auto;">
         <canvas id="ch-ed" style="display:block;"></canvas>
-        <canvas id="ch-team" style="display:none;"></canvas>
+        <div id="ch-team" style="display:none;height:100%;overflow-y:auto;"></div>
       </div>
     </div>
   </div>
@@ -3551,6 +3551,7 @@ function setRightChart(which){
     bt.style.background  = which==='team' ? 'var(--accent)' : 'var(--surface)';
     bt.style.color       = which==='team' ? '#fff' : 'var(--muted)';
   }
+  // ch-ed is a canvas, ch-team is a div
   if(ce) ce.style.display = which==='edge' ? 'block' : 'none';
   if(ct) ct.style.display = which==='team' ? 'block' : 'none';
   if(lbl) lbl.textContent = which==='edge' ? 'Edge Distribution' : 'Team Record';
@@ -4403,40 +4404,77 @@ function rCharts(picks){
     const edEl = document.getElementById('ch-ed');
     if(edEl) CH.ed=new Chart(edEl,{type:'bar',data:{labels:ek.map(k=>k+'%'),datasets:[{data:ek.map(k=>eb[k]),backgroundColor:'rgba(26,111,181,.2)',borderColor:'rgba(26,111,181,.8)',borderWidth:1,borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#f0f0f0'}},y:{grid:{color:'#f0f0f0'},ticks:{stepSize:1}}}}});
   } else {
-    // Team Record chart
+    // Team Record table: Play (bet on) vs Fade (bet against)
+    const isKelly = _perfMode === 'kelly' && _perfSource === 'picks';
     const teamStats = {};
+    const addStat = (team, side, p) => {
+      if(!teamStats[team]) teamStats[team] = {
+        play:{w:0,l:0,pnl:0}, fade:{w:0,l:0,pnl:0}
+      };
+      const stat = teamStats[team][side];
+      if(p.rs === 'Win'){ stat.w++; stat.pnl += isKelly ? pickKellyPnl(p) : p.uw; }
+      else if(p.rs === 'Loss'){ stat.l++; stat.pnl += isKelly ? pickKellyPnl(p) : p.uw; }
+    };
     res.forEach(p => {
       if(!p.tx) return;
-      if(!teamStats[p.tx]) teamStats[p.tx] = {w:0, l:0};
-      if(p.rs === 'Win') teamStats[p.tx].w++;
-      else if(p.rs === 'Loss') teamStats[p.tx].l++;
+      addStat(p.tx, 'play', p);       // team we bet ON
+      if(p.opp) addStat(p.opp, 'fade', p); // team we bet AGAINST
     });
+
     const teams = Object.keys(teamStats).sort((a,b) => {
-      const wa = teamStats[a].w/(teamStats[a].w+teamStats[a].l);
-      const wb = teamStats[b].w/(teamStats[b].w+teamStats[b].l);
-      return wb - wa;
+      // Sort by total games played descending
+      const ag = teamStats[a].play.w+teamStats[a].play.l+teamStats[a].fade.w+teamStats[a].fade.l;
+      const bg = teamStats[b].play.w+teamStats[b].play.l+teamStats[b].fade.w+teamStats[b].fade.l;
+      return bg - ag;
     });
-    if(CH.team) CH.team.destroy();
+
+    const fmt = (stat, kelly) => {
+      const games = stat.w + stat.l;
+      if(!games) return '<span style="color:var(--muted)">—</span>';
+      const rec = `${stat.w}-${stat.l}`;
+      const pnl = stat.pnl;
+      const pnlStr = kelly
+        ? `${pnl>=0?'+$':'-$'}${Math.abs(pnl).toLocaleString('en-US',{maximumFractionDigits:0})}`
+        : `${pnl>=0?'+':''}${pnl.toFixed(2)}u`;
+      const c = pnl > 0 ? 'var(--green)' : pnl < 0 ? 'var(--red)' : 'var(--muted)';
+      return `<span style="font-weight:600">${rec}</span> <span style="color:${c};font-size:9px">(${pnlStr})</span>`;
+    };
+
+    const rows = teams.map(t => {
+      const s = teamStats[t];
+      const tw = s.play.w + s.fade.w, tl = s.play.l + s.fade.l;
+      const tpnl = s.play.pnl + s.fade.pnl;
+      const tpnlStr = isKelly
+        ? `${tpnl>=0?'+$':'-$'}${Math.abs(tpnl).toLocaleString('en-US',{maximumFractionDigits:0})}`
+        : `${tpnl>=0?'+':''}${tpnl.toFixed(2)}u`;
+      const tc = tpnl > 0 ? 'var(--green)' : tpnl < 0 ? 'var(--red)' : 'var(--muted)';
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:4px 6px;white-space:nowrap">
+          <img src="${teamLogo(t)}" width="14" height="14" style="object-fit:contain;vertical-align:middle;margin-right:4px;" onerror="this.style.display='none'"/>
+          <strong>${t}</strong>
+        </td>
+        <td style="padding:4px 6px;text-align:center">${fmt(s.play, isKelly)}</td>
+        <td style="padding:4px 6px;text-align:center">${fmt(s.fade, isKelly)}</td>
+        <td style="padding:4px 6px;text-align:center;font-weight:600">
+          ${tw}-${tl} <span style="color:${tc};font-size:9px">(${tpnlStr})</span>
+        </td>
+      </tr>`;
+    }).join('');
+
     const tmEl = document.getElementById('ch-team');
-    if(tmEl && teams.length){
-      CH.team = new Chart(tmEl, {
-        type: 'bar',
-        data: {
-          labels: teams,
-          datasets: [
-            {label:'W', data: teams.map(t=>teamStats[t].w), backgroundColor:'rgba(46,125,50,.7)', borderRadius:2},
-            {label:'L', data: teams.map(t=>-(teamStats[t].l)), backgroundColor:'rgba(198,40,40,.6)', borderRadius:2},
-          ]
-        },
-        options: {
-          responsive:true, maintainAspectRatio:false,
-          plugins:{legend:{display:true,position:'top',labels:{font:{size:10},boxWidth:10}}},
-          scales:{
-            x:{grid:{color:'#f0f0f0'},ticks:{font:{size:9}}},
-            y:{grid:{color:'#f0f0f0'},stacked:false,ticks:{callback:v=>v<0?'L'+Math.abs(v):'W'+v}}
-          }
-        }
-      });
+    if(tmEl){
+      tmEl.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Calibri,sans-serif;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border)">
+              <th style="padding:4px 6px;text-align:left;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.05em">Team</th>
+              <th style="padding:4px 6px;text-align:center;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.05em">Play</th>
+              <th style="padding:4px 6px;text-align:center;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.05em">Fade</th>
+              <th style="padding:4px 6px;text-align:center;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.05em">Total</th>
+            </tr>
+          </thead>
+          <tbody>${rows || '<tr><td colspan="4" style="padding:8px;text-align:center;color:var(--muted)">No settled picks</td></tr>'}</tbody>
+        </table>`;
     }
   }
 }
