@@ -942,12 +942,19 @@ input[type=number] { -moz-appearance:textfield; }
 
   <!-- ── Controls row ── -->
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
-    <!-- Toggle: Global / Daily Picks -->
+    <!-- Source toggle: Global / Tracked Picks -->
     <div style="display:flex;border:1px solid var(--border2);border-radius:6px;overflow:hidden;font-size:11px;font-weight:600;">
       <button id="perf-toggle-global" onclick="setPerfSource('global')"
         style="padding:6px 14px;background:var(--accent);color:#fff;border:none;cursor:pointer;">Global</button>
       <button id="perf-toggle-picks" onclick="setPerfSource('picks')"
-        style="padding:6px 14px;background:var(--surface);color:var(--muted);border:none;cursor:pointer;">Daily Picks</button>
+        style="padding:6px 14px;background:var(--surface);color:var(--muted);border:none;cursor:pointer;">Tracked Picks</button>
+    </div>
+    <!-- Flat / Kelly toggle -->
+    <div style="display:flex;border:1px solid var(--border2);border-radius:6px;overflow:hidden;font-size:11px;font-weight:600;">
+      <button id="perf-toggle-flat" onclick="setPerfMode('flat')"
+        style="padding:6px 14px;background:var(--accent);color:#fff;border:none;cursor:pointer;">Flat</button>
+      <button id="perf-toggle-kelly" onclick="setPerfMode('kelly')"
+        style="padding:6px 14px;background:var(--surface);color:var(--muted);border:none;cursor:pointer;">Kelly $</button>
     </div>
     <!-- Edge slider -->
     <div style="display:flex;align-items:center;gap:8px;">
@@ -962,18 +969,35 @@ input[type=number] { -moz-appearance:textfield; }
 
   <!-- ── Stat cards ── -->
   <div class="sr" style="margin-bottom:14px;">
-    <div class="st cg"><div class="sl">Net Units</div><div class="sv g" id="pf-u">+0.00u</div><div class="ss">filtered</div></div>
+    <div class="st cg"><div class="sl" id="pf-u-label">Net Units</div><div class="sv g" id="pf-u">+0.00u</div><div class="ss">filtered</div></div>
     <div class="st ca"><div class="sl">Record</div><div class="sv" id="pf-rc">0-0</div></div>
     <div class="st ca"><div class="sl">Win Rate</div><div class="sv a" id="pf-wr">—</div></div>
-    <div class="st cy"><div class="sl">ROI</div><div class="sv y" id="pf-ri">—</div></div>
+    <div class="st cy"><div class="sl" id="pf-roi-label">ROI</div><div class="sv y" id="pf-ri">—</div></div>
     <div class="st ca"><div class="sl">Avg Edge</div><div class="sv" id="pf-ae">—</div></div>
     <div class="st ca"><div class="sl">Pending</div><div class="sv" id="pf-pd">0</div></div>
   </div>
 
   <!-- ── Charts row ── -->
   <div class="g2" style="margin-bottom:14px;">
-    <div class="card"><div class="ct">P/L Curve</div><div class="cw"><canvas id="ch-pl"></canvas></div></div>
-    <div class="card"><div class="ct">Edge Distribution</div><div class="cw" style="height:160px;"><canvas id="ch-ed"></canvas></div></div>
+    <div class="card">
+      <div class="ct">P/L Curve
+        <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:400;" id="pl-curve-label"></span>
+      </div>
+      <div class="cw"><canvas id="ch-pl"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="ct">
+        <span id="ch-right-label">Edge Distribution</span>
+        <div style="margin-left:auto;display:flex;border:1px solid var(--border2);border-radius:4px;overflow:hidden;font-size:10px;font-weight:600;">
+          <button id="ch-right-btn-edge" onclick="setRightChart('edge')" style="padding:2px 8px;background:var(--accent);color:#fff;border:none;cursor:pointer;">Edge Dist</button>
+          <button id="ch-right-btn-team" onclick="setRightChart('team')" style="padding:2px 8px;background:var(--surface);color:var(--muted);border:none;cursor:pointer;">Team Record</button>
+        </div>
+      </div>
+      <div class="cw" style="height:160px;">
+        <canvas id="ch-ed" style="display:block;"></canvas>
+        <canvas id="ch-team" style="display:none;"></canvas>
+      </div>
+    </div>
   </div>
 
   <!-- ── Bottom table (condensed read-only) ── -->
@@ -3476,6 +3500,8 @@ async function deleteGlobalFromFirebase(id){
 // ═══════════════════════════════════════════════
 let _perfSource = 'global';
 let _perfMinEdge = 0;
+let _perfMode = 'flat';   // 'flat' | 'kelly'
+let _rightChart = 'edge'; // 'edge' | 'team'
 
 function setPerfSource(src){
   _perfSource = src;
@@ -3488,8 +3514,47 @@ function setPerfSource(src){
     bp.style.color       = src==='picks'  ? '#fff' : 'var(--muted)';
   }
   const lbl = document.getElementById('perf-table-label');
-  if(lbl) lbl.textContent = src==='global' ? 'Global Pick Log' : 'Daily Pick Log';
+  if(lbl) lbl.textContent = src==='global' ? 'Global Pick Log' : 'Tracked Pick Log';
+  // Kelly mode only meaningful for Tracked Picks (has _kellyActual / ku data)
+  if(src === 'global' && _perfMode === 'kelly') setPerfMode('flat', true);
   rPerf();
+}
+
+function setPerfMode(mode, silent){
+  _perfMode = mode;
+  const bf = document.getElementById('perf-toggle-flat');
+  const bk = document.getElementById('perf-toggle-kelly');
+  if(bf && bk){
+    bf.style.background = mode==='flat'  ? 'var(--accent)' : 'var(--surface)';
+    bf.style.color       = mode==='flat'  ? '#fff' : 'var(--muted)';
+    bk.style.background  = mode==='kelly' ? 'var(--accent)' : 'var(--surface)';
+    bk.style.color       = mode==='kelly' ? '#fff' : 'var(--muted)';
+  }
+  // Kelly only available for Tracked Picks
+  if(mode === 'kelly' && _perfSource === 'global'){
+    setPerfSource('picks');
+    return; // setPerfSource calls rPerf
+  }
+  if(!silent) rPerf();
+}
+
+function setRightChart(which){
+  _rightChart = which;
+  const be = document.getElementById('ch-right-btn-edge');
+  const bt = document.getElementById('ch-right-btn-team');
+  const ce = document.getElementById('ch-ed');
+  const ct = document.getElementById('ch-team');
+  const lbl = document.getElementById('ch-right-label');
+  if(be && bt){
+    be.style.background = which==='edge' ? 'var(--accent)' : 'var(--surface)';
+    be.style.color       = which==='edge' ? '#fff' : 'var(--muted)';
+    bt.style.background  = which==='team' ? 'var(--accent)' : 'var(--surface)';
+    bt.style.color       = which==='team' ? '#fff' : 'var(--muted)';
+  }
+  if(ce) ce.style.display = which==='edge' ? 'block' : 'none';
+  if(ct) ct.style.display = which==='team' ? 'block' : 'none';
+  if(lbl) lbl.textContent = which==='edge' ? 'Edge Distribution' : 'Team Record';
+  rCharts(getPerfPicks());
 }
 
 function onPerfSlider(val){
@@ -3504,15 +3569,54 @@ function getPerfPicks(){
   return src.filter(p => (p.ed || 0) >= _perfMinEdge);
 }
 
+// Helper: get Kelly dollar P&L for a pick
+function pickKellyPnl(p){
+  // For Tracked Picks: use actual $ override, else kelly rec $
+  const unit = S.br.unit || 100;
+  const anchor = getTodayStartBR ? (getTodayStartBR() || S.br.start || 10000) : (S.br.start || 10000);
+  const actual = (p._kellyActual != null && p._kellyActual !== '') ? parseFloat(p._kellyActual) : null;
+  let riskDollars;
+  if(actual !== null){
+    riskDollars = actual;
+  } else if(p.ku > 0){
+    const kellyCapped = Math.min(p.ku * (S.br.kelly||0.5), S.br.maxPct||3);
+    riskDollars = (kellyCapped / 100) * anchor;
+  } else {
+    riskDollars = p.un * unit;
+  }
+  if(p.rs === 'Pending') return 0;
+  if(p.rs === 'Win'){
+    return p.od >= 0 ? riskDollars * (p.od/100) : riskDollars * (100/Math.abs(p.od));
+  } else {
+    return -riskDollars;
+  }
+}
+
 function rPerf(){
   const picks = getPerfPicks();
+  const isKelly = _perfMode === 'kelly' && _perfSource === 'picks';
   const res   = picks.filter(p => p.rs !== 'Pending');
   const wins  = res.filter(p => p.rs === 'Win').length;
-  const tot   = res.reduce((a,p) => a + p.uw, 0);
-  const risk  = res.reduce((a,p) => a + p.un, 0);
-  const roi   = risk > 0 ? (tot/risk)*100 : 0;
-  const avg   = picks.length ? picks.reduce((a,p) => a + (p.ed||0), 0) / picks.length : 0;
-  const pend  = picks.filter(p => p.rs === 'Pending').length;
+
+  let tot, risk, roi;
+  if(isKelly){
+    tot  = res.reduce((a,p) => a + pickKellyPnl(p), 0);
+    risk = res.reduce((a,p) => {
+      const actual = (p._kellyActual != null && p._kellyActual !== '') ? parseFloat(p._kellyActual) : null;
+      if(actual !== null) return a + actual;
+      const anchor = getTodayStartBR ? (getTodayStartBR() || S.br.start || 10000) : (S.br.start||10000);
+      const kellyCapped = Math.min((p.ku||0) * (S.br.kelly||0.5), S.br.maxPct||3);
+      return a + (kellyCapped > 0 ? (kellyCapped/100)*anchor : p.un*(S.br.unit||100));
+    }, 0);
+    roi = risk > 0 ? (tot/risk)*100 : 0;
+  } else {
+    tot  = res.reduce((a,p) => a + p.uw, 0);
+    risk = res.reduce((a,p) => a + p.un, 0);
+    roi  = risk > 0 ? (tot/risk)*100 : 0;
+  }
+
+  const avg  = picks.length ? picks.reduce((a,p) => a + (p.ed||0), 0) / picks.length : 0;
+  const pend = picks.filter(p => p.rs === 'Pending').length;
 
   const note = document.getElementById('perf-filter-note');
   const allSrc = _perfSource==='global' ? S.global : S.picks;
@@ -3520,8 +3624,18 @@ function rPerf(){
     ? `${picks.length} of ${allSrc.length} bets shown`
     : `${picks.length} bet${picks.length!==1?'s':''}`;
 
-  document.getElementById('pf-u').textContent  = (tot>=0?'+':'')+tot.toFixed(2)+'u';
-  document.getElementById('pf-u').className    = 'sv '+(tot>=0?'g':'r');
+  const uLabel = document.getElementById('pf-u-label');
+  const rLabel = document.getElementById('pf-roi-label');
+  if(uLabel) uLabel.textContent = isKelly ? 'Net P&L ($)' : 'Net Units';
+  if(rLabel) rLabel.textContent = isKelly ? 'ROI ($)' : 'ROI';
+
+  const uEl = document.getElementById('pf-u');
+  if(isKelly){
+    uEl.textContent = (tot>=0?'+$':'-$') + Math.abs(tot).toLocaleString('en-US',{maximumFractionDigits:0});
+  } else {
+    uEl.textContent = (tot>=0?'+':'')+tot.toFixed(2)+'u';
+  }
+  uEl.className = 'sv '+(tot>=0?'g':'r');
   document.getElementById('pf-rc').textContent = wins+'-'+(res.length-wins);
   document.getElementById('pf-wr').textContent = res.length ? (wins/res.length*100).toFixed(1)+'%' : '—';
   document.getElementById('pf-ri').textContent = risk ? (roi>=0?'+':'')+roi.toFixed(1)+'%' : '—';
@@ -3550,14 +3664,37 @@ function rPerfTable(picks){
   if(!tbody) return;
   if(ct) ct.textContent = picks.length + ' bet' + (picks.length!==1?'s':'');
   if(!picks.length){ tbody.innerHTML='<tr><td colspan="10" class="nd">No data.</td></tr>'; return; }
+  const isKelly = _perfMode === 'kelly' && _perfSource === 'picks';
+
+  // Calculate running totals
   let fwdRun = 0;
-  const runningTotals = picks.map(p => { if(p.rs!=='Pending') fwdRun+=p.uw; return fwdRun; });
+  const runningTotals = picks.map(p => {
+    if(p.rs!=='Pending') fwdRun += isKelly ? pickKellyPnl(p) : p.uw;
+    return fwdRun;
+  });
+
   tbody.innerHTML = [...picks].map((p,i) => ({p,run:runningTotals[i]})).reverse().map(({p,run}) => {
     const rc=run>=0?'var(--green)':'var(--red)';
-    const won=p.rs==='Pending'?'—':(p.uw>=0?'+':'')+p.uw.toFixed(2)+'u';
-    const runS=p.rs==='Pending'?'—':(run>=0?'+':'')+run.toFixed(2)+'u';
-    const wc=p.uw>0?'var(--green)':p.uw<0?'var(--red)':'var(--muted)';
     const rsColor=p.rs==='Win'?'var(--green)':p.rs==='Loss'?'var(--red)':'var(--muted)';
+    let won, runS, wc, betCell;
+    if(isKelly){
+      const kpnl = pickKellyPnl(p);
+      won = p.rs==='Pending' ? '—' : (kpnl>=0?'+$':'-$')+Math.abs(kpnl).toLocaleString('en-US',{maximumFractionDigits:0});
+      runS = p.rs==='Pending' ? '—' : (run>=0?'+$':'-$')+Math.abs(run).toLocaleString('en-US',{maximumFractionDigits:0});
+      wc = kpnl>0?'var(--green)':kpnl<0?'var(--red)':'var(--muted)';
+      // Show actual $ or kelly rec
+      const actual = (p._kellyActual!=null&&p._kellyActual!=='') ? parseFloat(p._kellyActual) : null;
+      const anchor = getTodayStartBR ? (getTodayStartBR()||S.br.start||10000) : (S.br.start||10000);
+      const kellyCapped = Math.min((p.ku||0)*(S.br.kelly||0.5), S.br.maxPct||3);
+      const recDollars = kellyCapped > 0 ? (kellyCapped/100)*anchor : p.un*(S.br.unit||100);
+      const showDollars = actual !== null ? actual : recDollars;
+      betCell = `<td style="text-align:right;color:var(--muted)">$${Math.round(showDollars).toLocaleString()}</td>`;
+    } else {
+      won = p.rs==='Pending' ? '—' : (p.uw>=0?'+':'')+p.uw.toFixed(2)+'u';
+      runS = p.rs==='Pending' ? '—' : (run>=0?'+':'')+run.toFixed(2)+'u';
+      wc = p.uw>0?'var(--green)':p.uw<0?'var(--red)':'var(--muted)';
+      betCell = `<td style="text-align:right;color:var(--muted)">${p.un}u</td>`;
+    }
     return `<tr>
       <td style="color:var(--muted);font-size:9px;white-space:nowrap">${fmtDtFull(p.dt)}</td>
       <td style="font-weight:600;white-space:nowrap"><img src="${teamLogo(p.tx)}" width="13" height="13" style="object-fit:contain;vertical-align:middle;margin-right:3px;" onerror="this.style.display='none'" />${p.tx||'—'}</td>
@@ -3565,7 +3702,7 @@ function rPerfTable(picks){
       <td style="text-align:right">${p.od>0?'+':''}${p.od}</td>
       <td style="color:var(--muted);text-align:right">${p.xwp?p.xwp.toFixed(1)+'%':'—'}</td>
       <td style="color:${(p.ed||0)>0?'var(--green)':(p.ed||0)<0?'var(--red)':'var(--muted)'};text-align:right">${(p.ed||0)>=0?'+':''}${(p.ed||0).toFixed(1)}%</td>
-      <td style="text-align:right;color:var(--muted)">${p.un}u</td>
+      ${betCell}
       <td style="color:${rsColor};font-weight:600">${p.rs}</td>
       <td style="color:${wc};text-align:right">${won}</td>
       <td style="color:${rc};font-weight:600;text-align:right">${runS}</td>
@@ -3619,7 +3756,7 @@ async function exportOddsPDF(){
       const awBg = awEdge != null && awEdge >= 3 ? 'background:#f0faf0;' : '';
       const hwBg = hwEdge != null && hwEdge >= 3 ? 'background:#f0faf0;' : '';
       const gameTime = r.gameTime || '';
-      const logo = (t) => `<img src="https://epemstein.github.io/MLB-Model/logos/${t}.png" width="14" height="14" style="object-fit:contain;vertical-align:middle;margin-right:4px;" onerror="this.style.display='none'" />`;
+      const logo = (t) => ''; // logos skipped in PDF (cross-origin restriction)
 
       // BO odds: show away/home stacked in one cell using rowspan
       const awBOStr = awBO != null ? `${awBO>0?'+':''}${awBO}` : '—';
@@ -4231,18 +4368,77 @@ Chart.defaults.font.family="Calibri,sans-serif";
 Chart.defaults.font.size=11;
 function rCharts(picks){
   picks = picks || getPerfPicks();
+  const isKelly = _perfMode === 'kelly' && _perfSource === 'picks';
   const res = picks.filter(p => p.rs !== 'Pending');
-  // P/L Curve
-  let run=0; const plD=[{x:0,y:0}];
-  res.forEach((p,i)=>{run+=p.uw;plD.push({x:i+1,y:+run.toFixed(3)});});
-  if(CH.pl)CH.pl.destroy();
-  const plColor=(plD.at(-1)?.y||0)>=0?'#2e7d32':'#c62828';
-  CH.pl=new Chart(document.getElementById('ch-pl'),{type:'line',data:{datasets:[{data:plD,borderColor:plColor,backgroundColor:'transparent',borderWidth:2,pointRadius:res.length<=40?3:0,tension:.2,fill:{target:{value:0},above:'rgba(46,125,50,.08)',below:'rgba(198,40,40,.08)'}}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{type:'linear',grid:{color:'#f0f0f0'}},y:{grid:{color:'#f0f0f0'},ticks:{callback:v=>(v>=0?'+':'')+v+'u'}}}}});
-  // Edge Distribution
-  const eb={}; picks.forEach(p=>{const b=Math.floor(p.ed||0);eb[b]=(eb[b]||0)+1;});
-  const ek=Object.keys(eb).map(Number).sort((a,b)=>a-b);
-  if(CH.ed)CH.ed.destroy();
-  CH.ed=new Chart(document.getElementById('ch-ed'),{type:'bar',data:{labels:ek.map(k=>k+'%'),datasets:[{data:ek.map(k=>eb[k]),backgroundColor:'rgba(26,111,181,.2)',borderColor:'rgba(26,111,181,.8)',borderWidth:1,borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#f0f0f0'}},y:{grid:{color:'#f0f0f0'},ticks:{stepSize:1}}}}});
+
+  // ── P/L Curve ──
+  if(CH.pl) CH.pl.destroy();
+  const plEl = document.getElementById('ch-pl');
+  if(plEl){
+    if(isKelly){
+      // Kelly $ P&L curve
+      let runDollars = 0;
+      const plD = [{x:0, y:0}];
+      res.forEach((p,i) => { runDollars += pickKellyPnl(p); plD.push({x:i+1, y:+runDollars.toFixed(2)}); });
+      const plColor = (plD.at(-1)?.y||0) >= 0 ? '#2e7d32' : '#c62828';
+      const lbl = document.getElementById('pl-curve-label');
+      if(lbl) lbl.textContent = 'Kelly $';
+      CH.pl = new Chart(plEl, {type:'line',data:{datasets:[{data:plD,borderColor:plColor,backgroundColor:'transparent',borderWidth:2,pointRadius:res.length<=40?3:0,tension:.2,fill:{target:{value:0},above:'rgba(46,125,50,.08)',below:'rgba(198,40,40,.08)'}}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{type:'linear',grid:{color:'#f0f0f0'}},y:{grid:{color:'#f0f0f0'},ticks:{callback:v=>(v>=0?'+$':'-$')+Math.abs(v).toLocaleString()}}}}});
+    } else {
+      // Flat units curve
+      let run=0; const plD=[{x:0,y:0}];
+      res.forEach((p,i)=>{run+=p.uw;plD.push({x:i+1,y:+run.toFixed(3)});});
+      const plColor=(plD.at(-1)?.y||0)>=0?'#2e7d32':'#c62828';
+      const lbl = document.getElementById('pl-curve-label');
+      if(lbl) lbl.textContent = 'Flat Units';
+      CH.pl = new Chart(plEl, {type:'line',data:{datasets:[{data:plD,borderColor:plColor,backgroundColor:'transparent',borderWidth:2,pointRadius:res.length<=40?3:0,tension:.2,fill:{target:{value:0},above:'rgba(46,125,50,.08)',below:'rgba(198,40,40,.08)'}}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{type:'linear',grid:{color:'#f0f0f0'}},y:{grid:{color:'#f0f0f0'},ticks:{callback:v=>(v>=0?'+':'')+v+'u'}}}}});
+    }
+  }
+
+  // ── Right chart: Edge Distribution or Team Record ──
+  if(_rightChart === 'edge'){
+    const eb={}; picks.forEach(p=>{const b=Math.floor(p.ed||0);eb[b]=(eb[b]||0)+1;});
+    const ek=Object.keys(eb).map(Number).sort((a,b)=>a-b);
+    if(CH.ed) CH.ed.destroy();
+    const edEl = document.getElementById('ch-ed');
+    if(edEl) CH.ed=new Chart(edEl,{type:'bar',data:{labels:ek.map(k=>k+'%'),datasets:[{data:ek.map(k=>eb[k]),backgroundColor:'rgba(26,111,181,.2)',borderColor:'rgba(26,111,181,.8)',borderWidth:1,borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#f0f0f0'}},y:{grid:{color:'#f0f0f0'},ticks:{stepSize:1}}}}});
+  } else {
+    // Team Record chart
+    const teamStats = {};
+    res.forEach(p => {
+      if(!p.tx) return;
+      if(!teamStats[p.tx]) teamStats[p.tx] = {w:0, l:0};
+      if(p.rs === 'Win') teamStats[p.tx].w++;
+      else if(p.rs === 'Loss') teamStats[p.tx].l++;
+    });
+    const teams = Object.keys(teamStats).sort((a,b) => {
+      const wa = teamStats[a].w/(teamStats[a].w+teamStats[a].l);
+      const wb = teamStats[b].w/(teamStats[b].w+teamStats[b].l);
+      return wb - wa;
+    });
+    if(CH.team) CH.team.destroy();
+    const tmEl = document.getElementById('ch-team');
+    if(tmEl && teams.length){
+      CH.team = new Chart(tmEl, {
+        type: 'bar',
+        data: {
+          labels: teams,
+          datasets: [
+            {label:'W', data: teams.map(t=>teamStats[t].w), backgroundColor:'rgba(46,125,50,.7)', borderRadius:2},
+            {label:'L', data: teams.map(t=>-(teamStats[t].l)), backgroundColor:'rgba(198,40,40,.6)', borderRadius:2},
+          ]
+        },
+        options: {
+          responsive:true, maintainAspectRatio:false,
+          plugins:{legend:{display:true,position:'top',labels:{font:{size:10},boxWidth:10}}},
+          scales:{
+            x:{grid:{color:'#f0f0f0'},ticks:{font:{size:9}}},
+            y:{grid:{color:'#f0f0f0'},stacked:false,ticks:{callback:v=>v<0?'L'+Math.abs(v):'W'+v}}
+          }
+        }
+      });
+    }
+  }
 }
 function rBRChart(){
   const res=S.picks.filter(p=>p.rs!=='Pending');
