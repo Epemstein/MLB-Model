@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>xMLB ALGO 2026</title>
+<title>MLB ALGO 2026</title>
 
 <style>
 
@@ -942,12 +942,7 @@ input[type=number] { -moz-appearance:textfield; }
 
   <!-- ── Controls row ── -->
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
-    <div style="display:flex;border:1px solid var(--border2);border-radius:6px;overflow:hidden;font-size:11px;font-weight:600;">
-      <button id="perf-toggle-global" onclick="setPerfSource('global')"
-        style="padding:6px 14px;background:var(--surface);color:var(--muted);border:none;cursor:pointer;">Global</button>
-      <button id="perf-toggle-picks" onclick="setPerfSource('picks')"
-        style="padding:6px 14px;background:var(--accent);color:#fff;border:none;cursor:pointer;">Tracked Picks</button>
-    </div>
+
     <div style="display:flex;border:1px solid var(--border2);border-radius:6px;overflow:hidden;font-size:11px;font-weight:600;">
       <button id="perf-toggle-flat" onclick="setPerfMode('flat')"
         style="padding:6px 14px;background:var(--surface);color:var(--muted);border:none;cursor:pointer;">Flat</button>
@@ -968,7 +963,7 @@ input[type=number] { -moz-appearance:textfield; }
     <div class="st cg"><div class="sl" id="pf-u-label">Net Units</div><div class="sv g" id="pf-u">+0.00u</div><div class="ss">filtered</div></div>
     <div class="st ca"><div class="sl">Record</div><div class="sv" id="pf-rc">0-0</div></div>
     <div class="st ca"><div class="sl">Win Rate</div><div class="sv a" id="pf-wr">—</div></div>
-    <div class="st cy"><div class="sl" id="pf-roi-label">ROI</div><div class="sv y" id="pf-ri">—</div></div>
+    <div class="st cy"><div class="sl" id="pf-roi-label">ROI</div><div class="sv" id="pf-ri" style="color:var(--muted)">—</div><div class="ss" id="pf-risked">—</div></div>
     <div class="st ca"><div class="sl">Avg Edge</div><div class="sv" id="pf-ae">—</div></div>
     <div class="st ca"><div class="sl">Pending</div><div class="sv" id="pf-pd">0</div></div>
   </div>
@@ -3514,20 +3509,11 @@ let _rightChart = 'team'; // 'edge' | 'team'
 let _perfTeamFilter = null; // team filter for pick log
 
 function setPerfSource(src){
-  _perfTeamFilter = null; // clear team filter on source change
-  _perfSource = src;
-  const bg = document.getElementById('perf-toggle-global');
-  const bp = document.getElementById('perf-toggle-picks');
-  if(bg && bp){
-    bg.style.background = src==='global' ? 'var(--accent)' : 'var(--surface)';
-    bg.style.color       = src==='global' ? '#fff' : 'var(--muted)';
-    bp.style.background  = src==='picks'  ? 'var(--accent)' : 'var(--surface)';
-    bp.style.color       = src==='picks'  ? '#fff' : 'var(--muted)';
-  }
+  // Global removed from Performance tab — always tracked picks
+  _perfTeamFilter = null;
+  _perfSource = 'picks';
   const lbl = document.getElementById('perf-table-label');
-  if(lbl) lbl.textContent = src==='global' ? 'Global Pick Log' : 'Tracked Pick Log';
-  // Kelly mode only meaningful for Tracked Picks (has _kellyActual / ku data)
-  if(src === 'global' && _perfMode === 'kelly') setPerfMode('flat', true);
+  if(lbl) lbl.textContent = 'Tracked Pick Log';
   rPerf();
 }
 
@@ -3584,8 +3570,7 @@ function onPerfSlider(val){
 }
 
 function getPerfPicks(){
-  const src = _perfSource === 'global' ? S.global : S.picks;
-  return src.filter(p => (p.ed || 0) >= _perfMinEdge);
+  return S.picks.filter(p => (p.ed || 0) >= _perfMinEdge);
 }
 
 // Helper: get Kelly dollar P&L for a pick
@@ -3657,7 +3642,21 @@ function rPerf(){
   uEl.className = 'sv '+(tot>=0?'g':'r');
   document.getElementById('pf-rc').textContent = wins+'-'+(res.length-wins);
   document.getElementById('pf-wr').textContent = res.length ? (wins/res.length*100).toFixed(1)+'%' : '—';
-  document.getElementById('pf-ri').textContent = risk ? (roi>=0?'+':'')+roi.toFixed(1)+'%' : '—';
+  const roiEl = document.getElementById('pf-ri');
+  const riskedEl = document.getElementById('pf-risked');
+  if(roiEl){
+    roiEl.textContent = risk ? (roi>=0?'+':'')+roi.toFixed(1)+'%' : '—';
+    roiEl.style.color = roi > 0 ? 'var(--green)' : roi < 0 ? 'var(--red)' : 'var(--muted)';
+  }
+  if(riskedEl){
+    if(risk > 0){
+      riskedEl.textContent = isKelly
+        ? '$'+risk.toLocaleString('en-US',{maximumFractionDigits:0})+' risked'
+        : risk.toFixed(1)+'u risked';
+    } else {
+      riskedEl.textContent = '—';
+    }
+  }
   document.getElementById('pf-ae').textContent = avg.toFixed(1)+'%';
   document.getElementById('pf-pd').textContent = pend;
 
