@@ -3573,27 +3573,21 @@ function getPerfPicks(){
   return S.picks.filter(p => (p.ed || 0) >= _perfMinEdge);
 }
 
-// Helper: get Kelly dollar P&L for a pick
+// Helper: get Kelly dollar P&L for a pick — matches Kelly tracker exactly
 function pickKellyPnl(p){
-  // For Tracked Picks: use actual $ override, else kelly rec $
-  const unit = S.br.unit || 100;
-  const anchor = getTodayStartBR ? (getTodayStartBR() || S.br.start || 10000) : (S.br.start || 10000);
-  const actual = (p._kellyActual != null && p._kellyActual !== '') ? parseFloat(p._kellyActual) : null;
-  let riskDollars;
-  if(actual !== null){
-    riskDollars = actual;
-  } else if(p.ku > 0){
-    const kellyCapped = Math.min(p.ku * (S.br.kelly||0.5), S.br.maxPct||3);
-    riskDollars = (kellyCapped / 100) * anchor;
-  } else {
-    riskDollars = p.un * unit;
-  }
   if(p.rs === 'Pending') return 0;
-  if(p.rs === 'Win'){
-    return p.od >= 0 ? riskDollars * (p.od/100) : riskDollars * (100/Math.abs(p.od));
-  } else {
-    return -riskDollars;
-  }
+  const unit = S.br.unit || 100;
+  const actual = (p._kellyActual != null && p._kellyActual !== '') ? parseFloat(p._kellyActual) : null;
+  // Use the same date-specific anchor the Kelly tracker uses
+  const ymd = p.dt && p.dt.includes('/') ? dateToYMD(p.dt) : (p.dt || '');
+  const anchor = (S._dailyBR && S._dailyBR[ymd] && S._dailyBR[ymd].confirmed)
+    ? S._dailyBR[ymd].start
+    : calcAutoStartBR(ymd).amount;
+  const recKuPct = p.ku ? Math.min(p.ku * (S.br.kelly||0.5), S.br.maxPct||3) : 0;
+  const riskD = actual !== null ? actual : (recKuPct > 0 ? recKuPct/100*anchor : p.un*unit);
+  return pickPnlDollarGlobal(p, anchor) || (p.rs === 'Win'
+    ? (p.od >= 0 ? riskD*(p.od/100) : riskD*(100/Math.abs(p.od)))
+    : -riskD);
 }
 
 function rPerf(){
@@ -3608,7 +3602,10 @@ function rPerf(){
     risk = res.reduce((a,p) => {
       const actual = (p._kellyActual != null && p._kellyActual !== '') ? parseFloat(p._kellyActual) : null;
       if(actual !== null) return a + actual;
-      const anchor = getTodayStartBR ? (getTodayStartBR() || S.br.start || 10000) : (S.br.start||10000);
+      const ymd = p.dt && p.dt.includes('/') ? dateToYMD(p.dt) : (p.dt||'');
+      const anchor = (S._dailyBR && S._dailyBR[ymd] && S._dailyBR[ymd].confirmed)
+        ? S._dailyBR[ymd].start
+        : calcAutoStartBR(ymd).amount;
       const kellyCapped = Math.min((p.ku||0) * (S.br.kelly||0.5), S.br.maxPct||3);
       return a + (kellyCapped > 0 ? (kellyCapped/100)*anchor : p.un*(S.br.unit||100));
     }, 0);
@@ -3702,9 +3699,12 @@ function rPerfTable(picks){
       wc = kpnl>0?'var(--green)':kpnl<0?'var(--red)':'var(--muted)';
       // Show actual $ or kelly rec
       const actual = (p._kellyActual!=null&&p._kellyActual!=='') ? parseFloat(p._kellyActual) : null;
-      const anchor = getTodayStartBR ? (getTodayStartBR()||S.br.start||10000) : (S.br.start||10000);
+      const ymdP = p.dt && p.dt.includes('/') ? dateToYMD(p.dt) : (p.dt||'');
+      const anchorP = (S._dailyBR && S._dailyBR[ymdP] && S._dailyBR[ymdP].confirmed)
+        ? S._dailyBR[ymdP].start
+        : calcAutoStartBR(ymdP).amount;
       const kellyCapped = Math.min((p.ku||0)*(S.br.kelly||0.5), S.br.maxPct||3);
-      const recDollars = kellyCapped > 0 ? (kellyCapped/100)*anchor : p.un*(S.br.unit||100);
+      const recDollars = kellyCapped > 0 ? (kellyCapped/100)*anchorP : p.un*(S.br.unit||100);
       const showDollars = actual !== null ? actual : recDollars;
       betCell = `<td style="text-align:right;color:var(--muted)">$${Math.round(showDollars).toLocaleString()}</td>`;
     } else {
